@@ -75,3 +75,5 @@ desktop.ini
 _ReSharper*/
 *.ReSharper
 *.ReSharper.user
+
+/docs
