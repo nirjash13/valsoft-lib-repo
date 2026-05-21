@@ -2,18 +2,24 @@ version: 1
 updated: "2026-05-21"
 
 current_focus:
-  - "Spec set authored under project_docs/specs/ (12 specs + index). Awaiting user sign-off before implementation."
+  - "Spec 01 COMPLETE (Run A + Run B + Run B-fix). Foundation production-ready against real Neon branch: 12/12 db:verify, 9/9 unit, biome, typecheck. Cross-tenant probe + org_id resolver + audit + provisioning + CASL all verified. Ready for Spec 02 (book management + AI ISBN enrichment)."
   - "Stack target architecture: Next.js 16 + Vercel + Neon Postgres + pgvector + Auth0 Organizations + Vercel AI Gateway"
   - "Multi-tenant SaaS library platform — assignment for Valsoft AI Engineering Manager role"
 
 recent_changes:
+  - "2026-05-21: Auth0 JWT shape pivot — roles in JWT, ROLE_PERMISSIONS table in lib/auth/permission.ts resolves to permissions. Forced by Auth0's `event.authorization` type (only carries roles[], no permissions[]). buildAbility now takes roles[]; Session.roles replaces Session.permissions. Action snippet in tests/integration/_README.md fixed. 12/12 db:verify, 9/9 unit, biome + typecheck green."
+  - "2026-05-21: Spec 01 Run B-fix landed — critic caught the builder's own deferral as a runtime CRITICAL (org_id text vs uuid). Resolver + cache + audit override + metadata gate + handleServerError branches all done. 12/12 db:verify, 9/9 unit, biome + typecheck green."
+  - "2026-05-21: Spec 01 Run B landed — Auth0 wiring + CASL Ability + audit writer + tenant provisioning + 0003 tenants RLS migration. 8/8 unit tests. Critic-opus flagged 1 CRITICAL + 3 HIGH + 6 MEDIUM."
+  - "2026-05-21: Spec 01 Run A hardening — verify-foundation.mjs caught 3 foundation bugs the mocks missed: SET LOCAL doesn't accept $1 placeholders (→ set_config), custom GUC params don't raise on unset (→ assert_tenant function), Neon's default role has BYPASSRLS=true (→ stack_app role). All 8 integration checks now pass against real Neon branch."
+  - "2026-05-21: Spec 01 Run A landed — Next.js 16 scaffold + Drizzle schema + RLS migration + withTenantTx (neon-serverless WS Pool) + audit_log append-only trigger + 3 unit tests. Critic-caught CRITICAL fixed in same run."
+  - "2026-05-21: .claude/CLAUDE.md rewritten for Next.js 16 stack; backend.md + migrations.md rules rewritten in the same pass"
+  - "2026-05-21: Working titles locked (Stack name, community/public library demo, ⌘K + sidebar advisor surface)"
   - "2026-05-21: 12 feature specs + INDEX written under project_docs/specs/"
   - "2026-05-21: Memory updated with Valsoft context, locked spec decisions, and feature-map"
   - "2026-05-21: 5 analysis docs + design brief authored under docs/analysis/ + docs/design/"
 
 open_blockers:
-  - "Phase-0: .claude/CLAUDE.md must be rewritten for Next.js 16 stack (currently .NET 9). Owner: user."
-  - "Phase-0: Auth0 Organizations tier availability must be verified before any auth code is written. Owner: user."
+  - "Phase-0: Auth0 Organizations tier availability must be verified before any auth code is written. Owner: user. Fallback: Clerk (free tier with Organizations) or tenant_id-column model from docs/analysis/04-multi-tenant-data-model.md."
 
 decisions_recent:
   - id: "D-2026-05-21-stack-pivot"
@@ -57,7 +63,8 @@ patterns_active:
   - "Evals as CI gates; cross-tenant probe in every AI eval set"
 
 next_steps:
-  - "User reviews and signs off project_docs/specs/00-INDEX.md and the 12 individual specs"
-  - "Resolve Phase-0 blockers: rewrite .claude/CLAUDE.md for Next.js stack; verify Auth0 Organizations tier"
-  - "Begin implementation in spec order via /spec-stage4-implement (start with 01-foundation)"
+  - "Spec 02 — book management (CRUD + AI ISBN enrichment + Open Library/Google Books fan-out). Foundation is verified against real Neon; Spec 02 builds on confirmed-working auth + audit + RLS layers."
+  - "User: deploy Auth0 Post-Login Action in dashboard so JWT carries org_id + roles[]. Corrected action code (no permissions field — Auth0 only exposes roles) is in tests/integration/_README.md. Required for end-to-end login flow but not for Spec 02 code/tests."
+  - "User: in Auth0 dashboard → Organizations → <demo org> → Roles, create the five roles system_owner / tenant_admin / librarian / member / guest, and assign at least one org member the tenant_admin role."
+  - "User: rotate stack_app password before any non-local deploy."
   - "Set up GitHub repo with CODEOWNERS, branch protection JSON, secrets, labels per Spec 12 §10"

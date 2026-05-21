@@ -1,79 +1,41 @@
-## .NET / C# ##
-# Build output
-bin/
-obj/
+# Node
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
 out/
-publish/
+dist/
 
-# NuGet
-*.nupkg
-*.nuspec
-.nuget/
-packages/
-!**/packages/repositories.config
-project.lock.json
-project.fragment.lock.json
-artifacts/
-
-# Test results
-TestResults/
+# Build artefacts
+*.tsbuildinfo
 coverage/
-*.coverage
-*.coveragexml
-*.cobertura.xml
-lcov.info
 
-# Visual Studio
-.vs/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-*.rsuser
-*.DotSettings
-*.DotSettings.user
-
-# Rider / JetBrains
-.idea/
-*.iml
-
-# VS Code
-.vscode/
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# dotnet tools
-.config/dotnet-tools.json
-
-# Logs
-*.log
-logs/
-*.log.*
-
-# Environment / secrets
+# Environment / secrets — never commit real values
 .env
 .env.*
-*.pem
-*.key
-appsettings.Development.json
-appsettings.Local.json
-secrets.json
+!.env.local.example
+
+# pnpm
+pnpm-debug.log*
 
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Claude Code / AI
+# Editors
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+
+# Claude Code / AI agents
 .claude/scratch/*
 !.claude/scratch/.gitignore
 .claude/worktrees/
 
-# Rider temp
-_ReSharper*/
-*.ReSharper
-*.ReSharper.user
-
+# Private docs (analysis, design, ADRs — not for public repo)
 /docs

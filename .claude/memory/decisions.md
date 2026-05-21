@@ -83,4 +83,95 @@
 
 ---
 
+## D-2026-05-21 — `.claude/CLAUDE.md` + backend/migration rules rewritten for Next.js 16
+
+**Decision**: Rewrote `.claude/CLAUDE.md` from the .NET 9 / Clean-Architecture template into the locked Next.js 16 stack configuration. Rewrote `.claude/rules/backend.md` and `.claude/rules/migrations.md` in the same pass because they referenced EF Core / dotnet commands that would have actively misled builder agents.
+
+**Rationale**: D-2026-05-21-stack-pivot locked the stack on 2026-05-21 but the agent-facing infrastructure file was still .NET-flavored. Builder agents read CLAUDE.md every turn; leaving it stale would have produced .NET-shaped Next.js code (wrong naming, wrong patterns, wrong test stack). User explicitly authorised the rewrite via auto-mode question on 2026-05-21.
+
+**Key sections in the new CLAUDE.md**:
+- Runtime & tooling table for the Next.js 16 stack
+- Project structure for App Router + multi-tenant
+- The `withTenantTx` four-layer isolation pattern as a first-class section
+- Server Actions = commands / RSC + Route Handlers = queries (CQRS without MediatR)
+- Drizzle + RLS migration patterns
+- AI rules: Gateway-only, `assertAiBudget` pre-check, Langfuse spans, versioned prompts, Edge Config kill switches
+- Vitest + Playwright + Storybook testing
+- pnpm command catalogue
+- Provenance markers for AI-authored docs / prompts
+
+**Refs**: `.claude/CLAUDE.md`, `.claude/rules/backend.md`, `.claude/rules/migrations.md`, `docs/analysis/03-tech-stack-decisions.md`
+
+---
+
+## D-2026-05-21 — Working titles locked
+
+**Decision**: Product name = **"Stack"**. Demo tenant theme = **community/public library**. Reader's Advisor surface = **⌘K primary + sidebar secondary**.
+
+**Rationale**: User confirmed the auto-mode picks. "Stack" is short, memorable, references library stacks, and is already baked into all 13 specs. Public-library demo is the most accessible scenario for the hiring panel and has rich seed data. ⌘K + sidebar matches the modern AI-app pattern (Linear, GitHub Copilot, Raycast) and demos the best.
+
+**Refs**: `project_docs/specs/00-INDEX.md`, `project_docs/specs/04-member-management.spec.md`, `project_docs/specs/06-readers-advisor.spec.md`
+
+---
+
+## D-2026-05-21 — Bind GUC values via `set_config()`, not `SET LOCAL = $1`
+
+**Decision**: `withTenantTx` (and any other code that binds `app.tenant_id`/`app.user_id`) uses `SELECT set_config(name, value, true)` instead of `SET LOCAL name = $1`.
+
+**Rationale**: Postgres rejects parameter placeholders in `SET LOCAL` syntax — `SET LOCAL app.tenant_id = $1` returns "syntax error at $1". The `set_config(text, text, boolean)` function form accepts parameters and `is_local=true` gives equivalent semantics. Verified empirically on Neon dev branch on 2026-05-21 via `scripts/verify-foundation.mjs`.
+
+**Refs**: `lib/db/with-tenant-tx.ts`, `tests/unit/db/with-tenant-tx.test.ts`, `.claude/scratch/spec-01-runA-fix/verify-final.log`
+
+---
+
+## D-2026-05-21 — RLS policies use `assert_tenant()` guard function
+
+**Decision**: All tenant-scoped RLS policies use `USING (tenant_id = assert_tenant())` where `assert_tenant()` is a STABLE plpgsql function that raises `insufficient_privilege` if `app.tenant_id` is null or empty.
+
+**Rationale**: Postgres custom GUC parameters (those with a `.` in the name, like `app.tenant_id`) do NOT raise from `current_setting()` when unset — they return an empty string. Dropping the `, true` arg doesn't help because empty string also doesn't raise. The previous policies (`tenant_id = current_setting('app.tenant_id')::uuid`) silently returned zero rows when bypassed, contradicting REQ-01-10 ("raises an exception"). The `assert_tenant()` function makes the raise behavior explicit and discovered-at-write-time. Verified empirically.
+
+**Refs**: `drizzle/0001_assert_tenant_guard.sql`, `scripts/verify-foundation.mjs` check #4
+
+---
+
+## D-2026-05-21 — App connects as `stack_app` (NOBYPASSRLS); migrations as `neondb_owner`
+
+**Decision**: Application runtime queries use a dedicated Postgres role `stack_app` that is `NOSUPERUSER` and `NOBYPASSRLS`. Migrations and admin scripts use Neon's default `neondb_owner` role. The two roles get separate connection strings in `.env.local` (`DATABASE_URL` for the app, `DATABASE_URL_UNPOOLED` for DDL/admin).
+
+**Rationale**: Neon's default `neondb_owner` role ships with `rolbypassrls=true`. Roles with `BYPASSRLS` skip RLS policies entirely, even when `FORCE ROW LEVEL SECURITY` is enabled — verified empirically by observing cross-tenant rows visible in a verify-foundation run on 2026-05-21. doc-04 had explicitly warned: "The app's DB role is **not** the table owner, so RLS is actually enforced [VERIFIED — Postgres docs gotcha]." Run A now follows that prescription.
+
+**Refs**: `drizzle/0002_app_role.sql`, `scripts/verify-foundation.mjs`, `.env.local.example`
+
+---
+
+## D-2026-05-21 — Auth0 org_id → tenants.id resolver via owner connection
+
+**Decision**: `lib/auth/resolve-tenant.ts` translates Auth0 `org_id` (text, e.g. `"org_abc123"`) to `tenants.id` (UUID) at session start. The lookup uses the owner connection (DATABASE_URL_UNPOOLED, BYPASSRLS) because stack_app + tenants RLS has a chicken-and-egg dependency on `app.tenant_id` being already bound. Results cached in-process for 5 minutes.
+
+**Rationale**: Auth0's org_id is a text identifier that doesn't satisfy `::uuid` cast. `assert_tenant()` raised on every tenant-scoped query in Run B. The verify-foundation script masked this by seeding raw UUIDs. Critic-opus caught it before Spec 02 work began. Fix prescribed in `docs/analysis/04-multi-tenant-data-model.md §Token → tenant resolution`.
+
+**Refs**: `lib/auth/resolve-tenant.ts`, `lib/db/owner-pool.ts`, `scripts/verify-foundation.mjs` check #12, `.claude/scratch/spec-01-runB/review.md` CRITICAL #1
+
+---
+
+## D-2026-05-21 — Audit log: writeSystemAuditLog as the single override path
+
+**Decision**: `lib/audit/audit-log.ts` exports two writers — `writeAuditLog(tx, ctx, entry)` for normal tenant-scoped mutations (tenantId + actorId pulled from ctx), and `writeSystemAuditLog(tx, override, entry)` for system_owner operations where the tenantId is explicitly carried (e.g., the act of creating that tenant). The audit module remains the sole insert point for `audit_log`.
+
+**Rationale**: Run B's first cut had `provisionTenant` bypass `writeAuditLog` and INSERT directly because the system_owner doesn't yet have a tenantCtx for the tenant being created. The bypass defeated the "sole insert point" invariant. The named-override pattern keeps both invariants: only audit-log code writes audit rows, and override is opt-in + grep-able.
+
+**Refs**: `lib/audit/audit-log.ts`, `app/(admin)/tenants/actions.ts`, `.claude/scratch/spec-01-runB/review.md` MEDIUM #2
+
+---
+
+## D-2026-05-21 — Server Action permission gate: explicit refusal, not TypeError-to-500
+
+**Decision**: Server Actions defined via `actionClient` without `.metadata({ permission })` are refused with HTTP 403 explicitly. Defense in depth: (a) `defineMetadataSchema()` makes Zod fail at parse time if metadata is missing/malformed; (b) the permission middleware explicitly checks `metadata.permission` and throws `PermissionDeniedError` if it's not a non-empty string. Both paths map to 403 in `handleServerError`. Unit-tested.
+
+**Rationale**: In Run B's first cut, omitting `.metadata()` caused a TypeError that `handleServerError` mapped to a generic 500. That was "fails-closed by accident, not by design" — a future contributor could be misled. Explicit refusal is the correct shape.
+
+**Refs**: `lib/auth/safe-action.ts`, `tests/unit/auth/safe-action.test.ts`, `.claude/scratch/spec-01-runB/review.md` HIGH #1
+
+---
+
 _Additional decisions will be appended here by /record-decision._
