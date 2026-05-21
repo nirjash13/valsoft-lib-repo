@@ -2,49 +2,62 @@ version: 1
 updated: "2026-05-21"
 
 current_focus:
-  - "Bootstrap new Valsoft Library .NET 9 / Clean Architecture application"
-  - "Set up .claude development environment and tooling"
+  - "Spec set authored under project_docs/specs/ (12 specs + index). Awaiting user sign-off before implementation."
+  - "Stack target architecture: Next.js 16 + Vercel + Neon Postgres + pgvector + Auth0 Organizations + Vercel AI Gateway"
+  - "Multi-tenant SaaS library platform — assignment for Valsoft AI Engineering Manager role"
 
-recent_changes: []
+recent_changes:
+  - "2026-05-21: 12 feature specs + INDEX written under project_docs/specs/"
+  - "2026-05-21: Memory updated with Valsoft context, locked spec decisions, and feature-map"
+  - "2026-05-21: 5 analysis docs + design brief authored under docs/analysis/ + docs/design/"
 
-open_blockers: []
+open_blockers:
+  - "Phase-0: .claude/CLAUDE.md must be rewritten for Next.js 16 stack (currently .NET 9). Owner: user."
+  - "Phase-0: Auth0 Organizations tier availability must be verified before any auth code is written. Owner: user."
 
 decisions_recent:
-  - id: "D-2026-05-21-clean-architecture"
+  - id: "D-2026-05-21-stack-pivot"
     decision: >
-      Adopt Clean Architecture (Domain → Application → Infrastructure → Api) as the
-      default project structure. Four-project layout: Domain, Application, Infrastructure, Api.
-      Dependency rule is strict — inner layers have no knowledge of outer layers.
+      Pivot from .NET 10 / EF / Vercel to Next.js 16 full-stack on Vercel + Neon Postgres + pgvector.
+      Rationale: Vercel does not host .NET; we need a single deployable on Vercel for the demo URL.
     refs:
-      - ".claude/rules/backend.md"
-      - ".claude/CLAUDE.md"
-  - id: "D-2026-05-21-dotnet9-stack"
+      - "docs/analysis/01-radar-analysis.md"
+      - "docs/analysis/03-tech-stack-decisions.md"
+  - id: "D-2026-05-21-solution-A-single-app"
     decision: >
-      .NET 9 / C# 13, ASP.NET Core Minimal APIs, Entity Framework Core 9, MediatR for CQRS,
-      FluentValidation, xUnit + FluentAssertions + NSubstitute for testing,
-      Serilog for structured logging. See CLAUDE.md for full tooling table.
+      Adopt Solution A: single Next.js app, all state in Postgres (incl. pgvector embeddings), Auth0 Organizations
+      as tenant boundary, four-layer isolation (auth → repo guard → SET LOCAL → RLS FORCE).
     refs:
-      - ".claude/CLAUDE.md"
-  - id: "D-2026-05-21-claude-setup"
+      - "docs/analysis/01-radar-analysis.md §Recommendation"
+      - "project_docs/specs/01-foundation-multi-tenancy-auth.spec.md"
+  - id: "D-2026-05-21-ai-tier1"
     decision: >
-      .claude setup adapted from Python/FastAPI (hire-a-mind project) to .NET 9.
-      python-reviewer replaced with dotnet-reviewer. CLAUDE.md fully rewritten for C#.
-      Agent pipeline (architect → builder → critic → writer) preserved unchanged.
+      Lock AI Tier-1 feature set: hybrid catalog search, Reader's Advisor (RAG + tool calls), ISBN-to-record
+      enrichment. Tier-2 ships if time allows; Tier-3 personalized recs is post-MVP.
     refs:
-      - ".claude/AGENTS.md"
+      - "docs/analysis/02-ai-features-research.md"
+      - "project_docs/specs/05-search-discovery.spec.md"
+      - "project_docs/specs/06-readers-advisor.spec.md"
+      - "project_docs/specs/02-book-management.spec.md"
+  - id: "D-2026-05-21-roles-and-signup"
+    decision: >
+      Role hierarchy: System Owner / Tenant Admin / Librarian / Member / Guest. Demo tenant pre-seeded with one
+      account per role. Member self-signup is a public form per tenant; status='pending' → librarian approval
+      queue → welcome email on approve / rejection email on reject.
+    refs:
+      - "project_docs/specs/04-member-management.spec.md"
 
 bugs_open: []
 
 patterns_active:
-  - "Clean Architecture with MediatR CQRS"
-  - "FluentValidation pipeline behaviour in MediatR"
-  - "IRepository<T> generic repository pattern"
-  - "Scoped instruction loading by directory"
-  - "Hybrid memory model (active.yaml + detailed markdown archives)"
+  - "Spec-driven workflow: docs/analysis (RADAR) → project_docs/specs (EARS+BDD) → builder TDD → critic review → CI gates"
+  - "Four-layer tenant isolation: Auth boundary → repo guard → SET LOCAL app.tenant_id → RLS FORCE"
+  - "CQRS in Next.js: Server Actions = commands (next-safe-action + Zod); RSC fetches/Route Handlers = queries"
+  - "AI calls routed through Vercel AI Gateway; Langfuse spans on every call; per-tenant cost cap pre-check"
+  - "Evals as CI gates; cross-tenant probe in every AI eval set"
 
 next_steps:
-  - "Define application requirements from Valsoft_Library_assignment.pdf"
-  - "Run /analyze to produce initial architecture plan based on requirements"
-  - "Scaffold solution structure: dotnet new sln + project hierarchy"
-  - "Set up CI (GitHub Actions: build + test + format check)"
-  - "Choose database (PostgreSQL vs SQL Server) and configure EF Core"
+  - "User reviews and signs off project_docs/specs/00-INDEX.md and the 12 individual specs"
+  - "Resolve Phase-0 blockers: rewrite .claude/CLAUDE.md for Next.js stack; verify Auth0 Organizations tier"
+  - "Begin implementation in spec order via /spec-stage4-implement (start with 01-foundation)"
+  - "Set up GitHub repo with CODEOWNERS, branch protection JSON, secrets, labels per Spec 12 §10"
