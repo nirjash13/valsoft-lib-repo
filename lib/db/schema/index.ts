@@ -5,3 +5,5 @@ export * from "./members";
 export * from "./audit-log";
 export * from "./books";
 export * from "./isbn-cache";
+export * from "./loans";
+export * from "./holds";

@@ -9,6 +9,9 @@ export type Branded<T, Brand extends string> = T & { readonly __brand: Brand };
 export type TenantId = Branded<string, "TenantId">;
 export type UserId = Branded<string, "UserId">;
 export type BookId = Branded<string, "BookId">;
+export type MemberId = Branded<string, "MemberId">;
+export type LoanId = Branded<string, "LoanId">;
+export type HoldId = Branded<string, "HoldId">;
 
 /**
  * Shared column: tenant_id (uuid, not null).

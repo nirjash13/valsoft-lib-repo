@@ -157,6 +157,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly string[]>> = {
     "hold:create",
     "hold:read",
     "hold:update",
+    "hold:delete", // Spec 03: librarians can cancel holds on behalf of members
     "auditlog:read",
     "ai:use_chat",
     "ai:use_enrich",
@@ -202,11 +203,16 @@ export function parsePermission(raw: string): { subject: AppSubject; action: App
   const rawSubject = raw.slice(0, colonIndex);
   const rawAction = raw.slice(colonIndex + 1);
 
-  // Title-case the subject for canonical match; "ai" is special-cased to all-caps "AI"
+  // Title-case the subject for canonical match. Multi-word subjects ("auditlog")
+  // and acronyms ("ai") need explicit mappings — the simple .charAt(0).toUpperCase()
+  // path would produce "Auditlog" (lowercase L) which doesn't match "AuditLog".
+  const lowerSubject = rawSubject.toLowerCase();
   const subject =
-    rawSubject.toUpperCase() === "AI"
+    lowerSubject === "ai"
       ? "AI"
-      : rawSubject.charAt(0).toUpperCase() + rawSubject.slice(1).toLowerCase();
+      : lowerSubject === "auditlog"
+        ? "AuditLog"
+        : rawSubject.charAt(0).toUpperCase() + rawSubject.slice(1).toLowerCase();
 
   const action = rawAction.toLowerCase();
 

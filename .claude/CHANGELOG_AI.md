@@ -4,6 +4,33 @@
 <!-- Format: ## YYYY-MM-DD — Short Title -->
 <!-- Each entry: what changed, files affected, decisions made. -->
 
+## 2026-05-21 — Spec 03 Run A: Circulation backend (loans, holds, FIFO promotion, FOR UPDATE concurrency)
+
+**What shipped (backend only, no UI — Run B will build the loans/holds pages):**
+
+- **Schema** — new Drizzle tables `lib/db/schema/loans.ts` (checkedOutAt, dueAt, returnedAt, renewedCount, librarianId), `lib/db/schema/holds.ts` + `holdStatusEnum` (queued/ready/expired/cancelled). `lib/db/schema/_shared.ts` adds `MemberId`/`LoanId`/`HoldId` brands. `lib/db/schema/members.ts` rewritten with `memberStatusEnum` + `status` column + `updatedAt`; Spec 04 will re-add `auth0_user_id` + approval workflow.
+- **Migration** — `drizzle/0006_circulation.sql` + `0006_circulation.down.sql` hand-written (DB unavailable in agent env). ALTER members + CREATE loans/holds with RLS `FORCE`, composite tenant-first indexes, partial UNIQUE on `(tenant_id, book_id, member_id) WHERE status IN ('queued','ready')` enforcing one-hold-per-member-per-book, partial index on `(tenant_id, book_id) WHERE returned_at IS NULL` for fast active-loan lookup.
+- **Domain (loans)** — `lib/domain/loans/{borrow-book,return-book,renew-loan,list-loans-by-member,list-active-loans,has-active-loan,loan-policy,errors,schemas}.ts`. `borrow-book` does `SELECT ... FOR UPDATE` on the book row (NFR-03-02 concurrency safety) + withdrawn/active-loan/member-status guards. `renew-loan` uses optimistic concurrency via `expectedUpdatedAt` + hold-conflict + limit check. `has-active-loan` is no longer a stub — real Drizzle query; Spec 02 soft-delete now correctly refuses when a loan is active.
+- **Domain (holds)** — `lib/domain/holds/{place-hold,cancel-hold,promote-next-hold,expire-stale-holds,list-holds-by-member,list-holds-by-book,errors,schemas}.ts`. `promote-next-hold` uses `FOR UPDATE SKIP LOCKED` (REQ-03-03 exactly-once promotion). `expire-stale-holds` is the worker entry point — `lib/notifications/workflows/expire-stale-holds.ts` stub wraps it pending Vercel Workflow trigger (Run C).
+- **Server Actions** — `app/(app)/loans/actions.ts` (borrowBookAction, returnBookAction, renewLoanAction), `app/(app)/holds/actions.ts` (placeHoldAction, cancelHoldAction). All next-safe-action with `.metadata({ permission })` + revalidateTag invalidation on `loans`/`holds`/`books`.
+- **CASL** — `lib/auth/permission.ts`: added `hold:delete` to librarian (REQ-03 spirit). `lib/auth/safe-action.ts`: 10 new error branches mapping every Spec 03 domain error → stable ProblemDetails `code` (BOOK_ALREADY_BORROWED 409, BOOK_WITHDRAWN 410, MEMBER_NOT_ACTIVE 403, LOAN_NOT_FOUND 404, LOAN_ALREADY_RETURNED 409, RENEWAL_LIMIT_REACHED 409, RENEWAL_BLOCKED_BY_HOLD 409, HOLD_NOT_FOUND 404, HOLD_ALREADY_EXISTS 409, HOLD_NOT_PLACEABLE 422).
+- **Tests** — `tests/unit/domain/loans/loan-policy.test.ts`: 3 load-bearing tests on pure helpers (`computeDueAt` default + leap-year, `canRenew` truth table). 33/33 across 10 files.
+
+**Smoke-test prep + NEW-1 fix landed in the same flow:**
+
+- `lib/db/client.ts` — hardened `DATABASE_URL` validation. Now rejects placeholder values like `<neon-pooled-stack_app>` with a clear error pointing to the correct format (was: deep `TypeError: Invalid URL` inside the Neon Pool constructor).
+- `lib/auth/permission.ts` — fixed NEW-1 (`auditlog:read` was being silently dropped because `parsePermission` title-cased it to `"Auditlog"` not `"AuditLog"`). Special-cased `"auditlog" → "AuditLog"` the same way `"ai" → "AI"`. `tests/unit/auth/ability.test.ts` adds a regression test asserting `buildAbility(["system_owner"]).can("read","AuditLog")` is true.
+- `biome.json` — added `.claude/worktrees/**` and `next-env.d.ts` to ignore list (Next dev server regenerated next-env.d.ts with formatting biome rejected).
+
+**Gates:** typecheck 0 errors, biome 0 errors (120 files), 33/33 unit tests, **integration tests + DB migration apply DEFERRED** (DB unavailable in agent env — see follow-ups).
+
+**Deferred for Run B/C and Spec 04:**
+
+- All five domain events (loan.checked_out, loan.returned, hold.placed, hold.promoted, hold.expired) are stub TODO comments — wired up in Spec 07 Notifications.
+- 6 integration tests documented in `.claude/scratch/spec-03-runA/diff-summary.md` follow-ups — must run against a real Neon branch before merge (IT-03-1 borrow happy path, IT-03-2 return-promotes-hold, IT-03-3 double-borrow refused under FOR UPDATE, IT-03-4 renewal-refused-by-hold, IT-03-5 renewal-limit, IT-03-6 has-active-loan regression).
+- Spec 04 must extend members with auth0_user_id + approval workflow + role linkage + can_borrow flag.
+- Vercel Workflow scheduled trigger for `expireStaleHolds` is Run C.
+
 ## 2026-05-21 — Spec 02 Run B + B-fix: Books UI (design tokens, app shell, list/detail/new/edit/trash, ISBN preview)
 
 **Run B (initial UI implementation):**

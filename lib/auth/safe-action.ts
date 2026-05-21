@@ -27,6 +27,20 @@ import {
   IsbnInvalidError,
   OptimisticConcurrencyError,
 } from "@/lib/domain/books/errors";
+import {
+  HoldAlreadyExistsError,
+  HoldNotFoundError,
+  HoldNotPlaceableError,
+} from "@/lib/domain/holds/errors";
+import {
+  BookAlreadyBorrowedError,
+  BookWithdrawnError,
+  LoanAlreadyReturnedError,
+  LoanNotFoundError,
+  MemberNotActiveError,
+  RenewalBlockedByHoldError,
+  RenewalLimitReachedError,
+} from "@/lib/domain/loans/errors";
 import { ActionMetadataValidationError, createSafeActionClient } from "next-safe-action";
 import { z } from "zod";
 import { buildAbility } from "./ability";
@@ -162,6 +176,108 @@ function handleServerError(err: Error): string {
       title: "Unprocessable Entity",
       status: 422,
       code: "ISBN_INVALID",
+      detail: err.message,
+    });
+  }
+
+  // --- Circulation errors (Spec 03) ---
+
+  if (err instanceof BookAlreadyBorrowedError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "BOOK_ALREADY_BORROWED",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof BookWithdrawnError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Gone",
+      status: 410,
+      code: "BOOK_WITHDRAWN",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof MemberNotActiveError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Forbidden",
+      status: 403,
+      code: "MEMBER_NOT_ACTIVE",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof LoanNotFoundError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      code: "LOAN_NOT_FOUND",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof LoanAlreadyReturnedError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "LOAN_ALREADY_RETURNED",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof RenewalLimitReachedError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "RENEWAL_LIMIT_REACHED",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof RenewalBlockedByHoldError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "RENEWAL_BLOCKED_BY_HOLD",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof HoldNotFoundError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      code: "HOLD_NOT_FOUND",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof HoldAlreadyExistsError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "HOLD_ALREADY_EXISTS",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof HoldNotPlaceableError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Unprocessable Entity",
+      status: 422,
+      code: "HOLD_NOT_PLACEABLE",
       detail: err.message,
     });
   }

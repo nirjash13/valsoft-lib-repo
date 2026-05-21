@@ -51,6 +51,17 @@ describe("buildAbility", () => {
     expect(ability?.can("read", "AuditLog")).toBe(false);
   });
 
+  it("system_owner role grants auditlog:read (parsePermission AuditLog title-case)", () => {
+    // Regression for the title-case bug: rawSubject.charAt(0).toUpperCase() +
+    // .slice(1).toLowerCase() produced "Auditlog" (lowercase L), which did not
+    // match KNOWN_SUBJECTS' "AuditLog". parsePermission returned null and the
+    // permission was silently dropped, with only a console.warn surfacing it.
+    // The fix special-cases "auditlog" → "AuditLog" the same way "ai" → "AI".
+    const ability = buildAbility(["system_owner"]);
+
+    expect(ability.can("read", "AuditLog")).toBe(true);
+  });
+
   it("member role does not bleed into Tenant subject (cross-subject deny)", () => {
     // If member ever granted tenant:settings, any reader could change library
     // settings. This is a security incident, not a bug.

@@ -20,6 +20,12 @@ if (!databaseUrl) {
   );
 }
 
+if (databaseUrl.startsWith("<") || !/^postgres(ql)?:\/\//.test(databaseUrl)) {
+  throw new Error(
+    `DATABASE_URL looks like a placeholder ("${databaseUrl.slice(0, 32)}…"). Replace it in .env.local with a real Neon connection string of the form postgresql://<user>:<password>@<host>/<db>?sslmode=require`,
+  );
+}
+
 // --- Drizzle client backed by the Neon WebSocket Pool ---
 
 /**

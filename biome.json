@@ -33,6 +33,14 @@
     }
   },
   "files": {
-    "ignore": ["node_modules/**", ".next/**", "drizzle/**", "coverage/**", ".claude/scratch/**"]
+    "ignore": [
+      "node_modules/**",
+      ".next/**",
+      "drizzle/**",
+      "coverage/**",
+      ".claude/scratch/**",
+      ".claude/worktrees/**",
+      "next-env.d.ts"
+    ]
   }
 }
