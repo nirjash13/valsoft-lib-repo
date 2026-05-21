@@ -4,6 +4,43 @@
 <!-- Format: ## YYYY-MM-DD — Short Title -->
 <!-- Each entry: what changed, files affected, decisions made. -->
 
+## 2026-05-21 — Spec 02 Run B + B-fix: Books UI (design tokens, app shell, list/detail/new/edit/trash, ISBN preview)
+
+**Run B (initial UI implementation):**
+
+- **Design system** — `app/globals.css` (259 LOC): Tailwind v4 CSS-first config; `@theme` directive surfaces semantic tokens from `docs/design/design-system-brief.md` (--bg-canvas, --bg-surface, --accent, etc.); dark-mode default, light-mode hand-tuned; .glass-surface utility; type scale (text-display through text-blurb); reduced-motion collapse. `postcss.config.mjs` for @tailwindcss/postcss.
+- **shadcn primitives** — `components/ui/{button,badge,input,textarea,label,separator,skeleton,dialog}.tsx` overridden to consume semantic tokens.
+- **App shell** — `app/layout.tsx`, `app/(app)/layout.tsx` (Sidebar + TopBar + Sonner Toaster), `components/app/{sidebar,topbar}.tsx`. Glass top-bar (frosted backdrop-filter), dark/light theme toggle, disabled-with-tooltip nav for future Specs.
+- **Dev-mode bypass** — `lib/auth/session.ts` + `middleware.ts`: `DEV_AUTH_BYPASS=1` env flag returns stub tenant_admin session (production-guarded). Without this, Auth0 Action not-yet-deployed blocks all local UI iteration.
+- **Books pages** — `app/(app)/books/{page.tsx,books-search.tsx,[id]/page.tsx,[id]/book-actions.tsx,[id]/edit/{page.tsx,edit-book-form.tsx},new/{page.tsx,new-book-form.tsx},trash/{page.tsx,trash-table.tsx}}`. Card grid (160×240 3:4 covers), typographic gradient cover fallback, ISBN preview flow with sourcesDiff chips + LLM-normalization banner, optimistic-concurrency 409 banner, soft-delete + restore via confirmation dialogs.
+- **Loading/error/not-found** — `app/(app)/books/{loading,error,not-found,[id]/loading}.tsx`. Skeleton primitives matching layout shapes; friendly error text with retry.
+- **Utilities** — `lib/utils/{cn,cover-color,isbn-banner,problem}.ts`. `coverGradient(title)` (djb2 hash → 8-hue gradient, deterministic per title); `selectIsbnBanner(state)` (pure switch on PreviewState.kind, ts-not-tsx for vitest).
+- **Tests** — `tests/unit/ui/{cover-color,isbn-banner}.test.ts`: 7 unit tests covering gradient determinism + 4 banner equivalence classes (BDD REQ-02-01 coverage).
+- **Dependencies added** — `clsx`, `tailwind-merge`, `class-variance-authority`, `sonner`, `@radix-ui/react-{label,separator,dialog}`, `react-hook-form`, `@hookform/resolvers`.
+
+**Run B-fix (5 fixes applied, per orchestrator self-review):**
+
+- **F-1 (HIGH)** Replaced `text-[11px]` (below brief's 12px floor) with `text-caption` in `new-book-form.tsx:293` and `[id]/page.tsx:105`.
+- **F-3 (MEDIUM)** `[id]/page.tsx` cover: removed `border border-[hsl(var(--border-subtle))]`; kept `elev-2`. Brief: shadow XOR border, never both.
+- **F-4 (MEDIUM)** `components/app/sidebar.tsx`: accepts `canViewTrash: boolean` prop; `app/(app)/layout.tsx` computes server-side via `buildAbility(session.roles).can("delete", "Book")`. Trash entry hidden for non-admin (was visible-but-404 before).
+- **F-5 (MEDIUM)** `lib/auth/session.ts`: dev bypass now reads `DEV_BYPASS_TENANT_ID` env first; logs resolved tenant once per process; throws new `DevBypassNoTenantsError` (in `lib/auth/errors.ts`) instead of silent zero-UUID fallback. Mapped to 503 in safe-action.ts.
+- **F-6 (MEDIUM)** `lib/utils/problem.ts`: added `code?: string` to `ProblemDetails`. `lib/auth/safe-action.ts`: every `handleServerError` branch emits stable `code` (`OPTIMISTIC_CONCURRENCY`, `TENANT_NOT_PROVISIONED`, `BOOK_NOT_FOUND`, etc.). `edit-book-form.tsx:83`: switched detection from `err?.status === 409` to `err?.code === "OPTIMISTIC_CONCURRENCY"`. Disambiguates the two 409 cases.
+
+**Gates (after fix run):**
+- `pnpm typecheck` — 0 errors
+- `pnpm biome check .` — 0 errors (98 files)
+- `pnpm test:unit` — 27/27 passing across 9 files
+
+**Deferred (recorded in active.yaml):**
+- F-2 (MEDIUM, ~30-45min sweep) — components use `bg-[hsl(var(--bg-surface))]` arbitrary-value syntax instead of `@theme`-generated utilities. Pure refactor, ~30 files. Skipped from this fix run to keep diff reviewable.
+- F-7 through F-12 (6 LOWs) — see active.yaml next_steps
+- NEW-1 — `auditlog` is not in `AppSubject` union but `ROLE_PERMISSIONS` references `auditlog:read`. Pre-existing Spec 01 bug; emits warning during tests.
+- NEW-2 — `.env.local.example` blocked by tool permissions; needs manual addition of `DEV_BYPASS_TENANT_ID=<uuid>` documentation line.
+
+**Smoke test deferred** — agent has no live DB access. User must set `DEV_AUTH_BYPASS=1` + `DATABASE_URL` + `OWNER_DATABASE_URL` (optionally `DEV_BYPASS_TENANT_ID`) in `.env.local`, then `pnpm dev` and exercise the golden path: /books → New Book → 9780132350884 → preview → save → edit → soft-delete → Trash → Restore.
+
+---
+
 ## 2026-05-21 — Spec 02 Run A-fix: Critic findings addressed (F-1 through F-11)
 
 **Fixes applied (8 findings, per critic Run A review):**

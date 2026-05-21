@@ -45,6 +45,12 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  // DEV bypass: skip Auth0 middleware entirely so local dev doesn't need Auth0 configured.
+  // SECURITY: this check runs in Edge — process.env is available there.
+  if (process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "1") {
+    return NextResponse.next();
+  }
+
   // Delegate all other routes to the Auth0 middleware.
   // The SDK handles /auth/* internally and protects everything else.
   return auth0.middleware(req);

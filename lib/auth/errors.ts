@@ -9,6 +9,7 @@
  *   PermissionDeniedError              → 403
  *   OrganizationMembershipRequiredError → 403
  *   TenantNotProvisionedError          → 409 Conflict
+ *   DevBypassNoTenantsError            → 503 Service Unavailable
  *   (everything else)                  → 500
  */
 
@@ -91,6 +92,28 @@ export class TenantNotProvisionedError extends Error {
   constructor(public readonly orgId: string) {
     super(
       `Tenant for Auth0 org "${orgId}" has not been provisioned in Stack yet. Please contact your administrator.`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DevBypassNoTenantsError
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown by `sessionToTenantCtx` when DEV_AUTH_BYPASS=1 is set but the database
+ * has no seeded tenants. Returning a zero-UUID would cause RLS to silently return
+ * empty results — indistinguishable from "catalog is empty" — which actively
+ * misleads smoke tests.
+ *
+ * Maps to HTTP 503 Service Unavailable in handleServerError.
+ */
+export class DevBypassNoTenantsError extends Error {
+  override readonly name = "DevBypassNoTenantsError";
+
+  constructor() {
+    super(
+      "DEV_AUTH_BYPASS=1 but no tenants are seeded. Run pnpm db:seed (or pnpm db:bootstrap) first, then restart the dev server.",
     );
   }
 }

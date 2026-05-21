@@ -32,6 +32,7 @@ import { z } from "zod";
 import { buildAbility } from "./ability";
 import type { AppAbility } from "./ability";
 import {
+  DevBypassNoTenantsError,
   OrganizationMembershipRequiredError,
   PermissionDeniedError,
   TenantNotProvisionedError,
@@ -80,6 +81,7 @@ function handleServerError(err: Error): string {
       type: "about:blank",
       title: "Permission Denied",
       status: 403,
+      code: "PERMISSION_DENIED",
       detail: err.message,
     });
   }
@@ -89,6 +91,7 @@ function handleServerError(err: Error): string {
       type: "about:blank",
       title: "Unauthorized",
       status: 401,
+      code: "UNAUTHORIZED",
       detail: err.message,
     });
   }
@@ -98,6 +101,7 @@ function handleServerError(err: Error): string {
       type: "about:blank",
       title: "Organization Membership Required",
       status: 403,
+      code: "ORG_MEMBERSHIP_REQUIRED",
       detail: err.message,
     });
   }
@@ -107,7 +111,18 @@ function handleServerError(err: Error): string {
       type: "about:blank",
       title: "Tenant Not Provisioned",
       status: 409,
+      code: "TENANT_NOT_PROVISIONED",
       detail: "Your library is not yet provisioned. Please contact your administrator.",
+    });
+  }
+
+  if (err instanceof DevBypassNoTenantsError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Service Unavailable",
+      status: 503,
+      code: "DEV_BYPASS_NO_TENANTS",
+      detail: err.message,
     });
   }
 
@@ -116,6 +131,7 @@ function handleServerError(err: Error): string {
       type: "about:blank",
       title: "Not Found",
       status: 404,
+      code: "BOOK_NOT_FOUND",
       detail: err.message,
     });
   }
@@ -125,6 +141,7 @@ function handleServerError(err: Error): string {
       type: "about:blank",
       title: "Conflict",
       status: 409,
+      code: "OPTIMISTIC_CONCURRENCY",
       detail: err.message,
     });
   }
@@ -134,6 +151,7 @@ function handleServerError(err: Error): string {
       type: "about:blank",
       title: "Unprocessable Entity",
       status: 422,
+      code: "BOOK_HAS_ACTIVE_LOAN",
       detail: err.message,
     });
   }
@@ -143,6 +161,7 @@ function handleServerError(err: Error): string {
       type: "about:blank",
       title: "Unprocessable Entity",
       status: 422,
+      code: "ISBN_INVALID",
       detail: err.message,
     });
   }
@@ -158,6 +177,7 @@ function handleServerError(err: Error): string {
       type: "about:blank",
       title: "Permission Denied",
       status: 403,
+      code: "MISSING_PERMISSION_METADATA",
       detail: "missing permission: <no permission metadata declared>",
     });
   }
@@ -167,6 +187,7 @@ function handleServerError(err: Error): string {
     type: "about:blank",
     title: "Internal Server Error",
     status: 500,
+    code: "INTERNAL_ERROR",
     detail: "An unexpected error occurred",
   });
 }

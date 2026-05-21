@@ -8,12 +8,48 @@
  *
  * IMPORTANT: `auth0.getSession()` in App Router reads from the Next.js request
  * context automatically in RSC / Server Actions — no explicit req/res needed.
+ *
+ * DEV BYPASS: Set DEV_AUTH_BYPASS=1 in .env.local to skip Auth0 during local
+ * development (Auth0 Post-Login Action is not yet deployed). Forbidden in production.
  */
 
 import { auth0 } from "@/lib/auth0";
-import { OrganizationMembershipRequiredError, UnauthorizedError } from "./errors";
+import {
+  DevBypassNoTenantsError,
+  OrganizationMembershipRequiredError,
+  UnauthorizedError,
+} from "./errors";
 import { resolveTenantIdByAuth0Org } from "./resolve-tenant";
 import type { Session, TenantCtx, TenantId, UserId } from "./types";
+
+// ---------------------------------------------------------------------------
+// Dev-mode bypass
+// ---------------------------------------------------------------------------
+
+/**
+ * DEV_BYPASS_ORG_ID is the Auth0 org_id placeholder used for the dev stub session.
+ * The resolve-tenant lookup will find the first tenant in the DB that matches,
+ * or we fall back to querying by first-row in sessionToTenantCtx.
+ *
+ * The stub org_id must match a real tenants.auth0_org_id in the dev DB.
+ * Set DEV_BYPASS_ORG_ID in .env.local to override; defaults to "org_dev_demo".
+ */
+const DEV_BYPASS_ORG_ID = (process.env.DEV_BYPASS_ORG_ID ?? "org_dev_demo") as TenantId;
+
+/** Suppress repeated dev-bypass warnings after the first resolution per process. */
+let devBypassWarnedOnce = false;
+
+const DEV_STUB_SESSION: Session = {
+  sub: "dev|bypass-user" as UserId,
+  orgId: DEV_BYPASS_ORG_ID,
+  email: "dev@stack.local",
+  roles: ["tenant_admin"],
+};
+
+function isDevBypassEnabled(): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  return process.env.DEV_AUTH_BYPASS === "1";
+}
 
 // ---------------------------------------------------------------------------
 // getSession
@@ -31,6 +67,9 @@ import type { Session, TenantCtx, TenantId, UserId } from "./types";
  * "library not yet provisioned" page rather than a cryptic 500.
  */
 export async function getSession(): Promise<Session | null> {
+  // DEV bypass: skip Auth0 entirely; return stub tenant_admin session.
+  if (isDevBypassEnabled()) return DEV_STUB_SESSION;
+
   const raw = await auth0.getSession();
   if (!raw) return null;
 
@@ -97,6 +136,47 @@ export async function requireSession(): Promise<Session> {
  * @throws {TenantNotProvisionedError} if no tenants row matches session.orgId.
  */
 export async function sessionToTenantCtx(session: Session): Promise<TenantCtx> {
+  // DEV bypass: resolve tenant from env var or by querying the first seeded tenant.
+  if (isDevBypassEnabled()) {
+    // If DEV_BYPASS_TENANT_ID is explicitly set, use it directly (no DB round-trip).
+    const envTenantId = process.env.DEV_BYPASS_TENANT_ID;
+    if (envTenantId) {
+      if (!devBypassWarnedOnce) {
+        console.warn(
+          `[DEV_AUTH_BYPASS] Resolved tenant: ${envTenantId} (auth0_org_id=${session.orgId}) — from DEV_BYPASS_TENANT_ID`,
+        );
+        devBypassWarnedOnce = true;
+      }
+      return { tenantId: envTenantId, userId: session.sub };
+    }
+
+    // Fall back to querying the first tenant (oldest by created_at).
+    const { getOwnerPool } = await import("@/lib/db/owner-pool");
+    const pool = getOwnerPool();
+    const client = await pool.connect();
+    try {
+      const res = await client.query<{ id: string; auth0_org_id: string }>(
+        "SELECT id, auth0_org_id FROM tenants ORDER BY created_at LIMIT 1",
+      );
+      if (res.rows.length === 0) {
+        // No tenants seeded — throw a clear error rather than returning a zero-UUID
+        // that silently produces empty RLS results and misleads smoke tests.
+        throw new DevBypassNoTenantsError();
+      }
+      // biome-ignore lint/style/noNonNullAssertion: length check guarantees row
+      const resolvedId = res.rows[0]!.id;
+      if (!devBypassWarnedOnce) {
+        console.warn(
+          `[DEV_AUTH_BYPASS] Resolved tenant: ${resolvedId} (auth0_org_id=${session.orgId})`,
+        );
+        devBypassWarnedOnce = true;
+      }
+      return { tenantId: resolvedId, userId: session.sub };
+    } finally {
+      client.release();
+    }
+  }
+
   const tenantId = await resolveTenantIdByAuth0Org(session.orgId);
   return {
     tenantId,
