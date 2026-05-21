@@ -1,0 +1,50 @@
+version: 1
+updated: "2026-05-21"
+
+current_focus:
+  - "Bootstrap new Valsoft Library .NET 9 / Clean Architecture application"
+  - "Set up .claude development environment and tooling"
+
+recent_changes: []
+
+open_blockers: []
+
+decisions_recent:
+  - id: "D-2026-05-21-clean-architecture"
+    decision: >
+      Adopt Clean Architecture (Domain → Application → Infrastructure → Api) as the
+      default project structure. Four-project layout: Domain, Application, Infrastructure, Api.
+      Dependency rule is strict — inner layers have no knowledge of outer layers.
+    refs:
+      - ".claude/rules/backend.md"
+      - ".claude/CLAUDE.md"
+  - id: "D-2026-05-21-dotnet9-stack"
+    decision: >
+      .NET 9 / C# 13, ASP.NET Core Minimal APIs, Entity Framework Core 9, MediatR for CQRS,
+      FluentValidation, xUnit + FluentAssertions + NSubstitute for testing,
+      Serilog for structured logging. See CLAUDE.md for full tooling table.
+    refs:
+      - ".claude/CLAUDE.md"
+  - id: "D-2026-05-21-claude-setup"
+    decision: >
+      .claude setup adapted from Python/FastAPI (hire-a-mind project) to .NET 9.
+      python-reviewer replaced with dotnet-reviewer. CLAUDE.md fully rewritten for C#.
+      Agent pipeline (architect → builder → critic → writer) preserved unchanged.
+    refs:
+      - ".claude/AGENTS.md"
+
+bugs_open: []
+
+patterns_active:
+  - "Clean Architecture with MediatR CQRS"
+  - "FluentValidation pipeline behaviour in MediatR"
+  - "IRepository<T> generic repository pattern"
+  - "Scoped instruction loading by directory"
+  - "Hybrid memory model (active.yaml + detailed markdown archives)"
+
+next_steps:
+  - "Define application requirements from Valsoft_Library_assignment.pdf"
+  - "Run /analyze to produce initial architecture plan based on requirements"
+  - "Scaffold solution structure: dotnet new sln + project hierarchy"
+  - "Set up CI (GitHub Actions: build + test + format check)"
+  - "Choose database (PostgreSQL vs SQL Server) and configure EF Core"
