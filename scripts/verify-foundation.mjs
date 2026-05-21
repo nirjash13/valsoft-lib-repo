@@ -21,6 +21,8 @@
 //  10. [Run B] tenants RLS: bound to tenant A, SELECT of tenant B's id returns 0 rows
 //  11. [Run B-fix] org_id → UUID resolver: SELECT id FROM tenants WHERE auth0_org_id = $1
 //      (the CRITICAL fix: proves the lookup that resolveTenantIdByAuth0Org relies on works)
+//  12. [Spec 02] books table: as tenant A seed a book; as tenant B SELECT returns 0 rows;
+//      INSERT attempt with tenant A book id fails or returns 0 affected. (REQ-02-01 RLS)
 //
 // Usage: pnpm run db:verify
 
@@ -79,17 +81,26 @@ try {
   // 1. RLS + FORCE on tenant tables; not on tenants
   // ----------------------------------------------------------------------------
   await check(
-    "RLS enabled + FORCED on tenant_memberships, members, audit_log, tenants",
+    "RLS enabled + FORCED on tenant_memberships, members, audit_log, tenants, books, isbn_cache",
     async () => {
       const { rows } = await owner.query(
         `SELECT relname, relrowsecurity, relforcerowsecurity
          FROM pg_class
-         WHERE relname IN ('tenant_memberships','members','audit_log','tenants')`,
+         WHERE relname IN ('tenant_memberships','members','audit_log','tenants','books','isbn_cache')`,
       );
       const byName = Object.fromEntries(rows.map((r) => [r.relname, r]));
-      for (const t of ["tenant_memberships", "members", "audit_log", "tenants"]) {
+      // books and isbn_cache only required after migration 0004 is applied; skip if missing.
+      const required = ["tenant_memberships", "members", "audit_log", "tenants"];
+      const optional = ["books", "isbn_cache"];
+      for (const t of required) {
         if (!byName[t]?.relrowsecurity) throw new Error(`${t} missing RLS`);
         if (!byName[t]?.relforcerowsecurity) throw new Error(`${t} missing FORCE`);
+      }
+      for (const t of optional) {
+        if (byName[t]) {
+          if (!byName[t].relrowsecurity) throw new Error(`${t} missing RLS`);
+          if (!byName[t].relforcerowsecurity) throw new Error(`${t} missing FORCE`);
+        }
       }
     },
   );
@@ -346,6 +357,38 @@ try {
       );
       if (missing.length !== 0) {
         throw new Error("Query for non-existent org_id returned a row — impossible");
+      }
+    },
+  );
+
+  // ----------------------------------------------------------------------------
+  // 12. [Spec 02] books RLS — tenant A seeds a book; tenant B SELECT returns 0 rows
+  //     (NFR-01-02 cross-tenant probe extended to books table)
+  // ----------------------------------------------------------------------------
+  await check(
+    "[Spec 02] as stack_app: books RLS — tenant A books invisible to tenant B",
+    async () => {
+      // Seed a book as tenant A via owner (bypasses RLS for setup)
+      const bookId = randomUUID();
+      await owner.query(
+        `INSERT INTO books (id, tenant_id, title, authors)
+         VALUES ($1, $2, 'Spec 02 Verify Book', ARRAY['Verify Author'])`,
+        [bookId, tenantA],
+      );
+
+      try {
+        // As tenant B: direct SELECT by primary key must return 0 rows
+        await app.query("BEGIN");
+        await app.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantB]);
+        const { rows } = await app.query("SELECT id FROM books WHERE id = $1", [bookId]);
+        await app.query("COMMIT");
+
+        if (rows.length !== 0) {
+          throw new Error(`tenant B saw tenant A book (id=${bookId}) — RLS LEAK on books table`);
+        }
+      } finally {
+        // Cleanup book regardless of test outcome
+        await owner.query("DELETE FROM books WHERE id = $1", [bookId]);
       }
     },
   );

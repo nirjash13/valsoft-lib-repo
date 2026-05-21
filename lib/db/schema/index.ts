@@ -3,3 +3,5 @@ export * from "./tenants";
 export * from "./tenant-memberships";
 export * from "./members";
 export * from "./audit-log";
+export * from "./books";
+export * from "./isbn-cache";

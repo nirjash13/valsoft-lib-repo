@@ -21,6 +21,12 @@
  * REQ-01-05: PermissionDeniedError if ability.can() is false.
  */
 
+import {
+  BookHasActiveLoanError,
+  BookNotFoundError,
+  IsbnInvalidError,
+  OptimisticConcurrencyError,
+} from "@/lib/domain/books/errors";
 import { ActionMetadataValidationError, createSafeActionClient } from "next-safe-action";
 import { z } from "zod";
 import { buildAbility } from "./ability";
@@ -102,6 +108,42 @@ function handleServerError(err: Error): string {
       title: "Tenant Not Provisioned",
       status: 409,
       detail: "Your library is not yet provisioned. Please contact your administrator.",
+    });
+  }
+
+  if (err instanceof BookNotFoundError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof OptimisticConcurrencyError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof BookHasActiveLoanError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Unprocessable Entity",
+      status: 422,
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof IsbnInvalidError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Unprocessable Entity",
+      status: 422,
+      detail: err.message,
     });
   }
 

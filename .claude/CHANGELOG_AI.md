@@ -4,6 +4,56 @@
 <!-- Format: ## YYYY-MM-DD — Short Title -->
 <!-- Each entry: what changed, files affected, decisions made. -->
 
+## 2026-05-21 — Spec 02 Run A-fix: Critic findings addressed (F-1 through F-11)
+
+**Fixes applied (8 findings, per critic Run A review):**
+
+- **F-1 (HIGH)** `app/(app)/books/actions.ts`: `previewIsbnAction` permission changed from `book:read` → `ai:use_enrich`. Blocks guest/member abuse of AI budget + external API fan-out.
+- **F-2 (HIGH)** `tests/integration/actions/create-book.test.ts`: `afterAll` cleanup rewritten. Disables `audit_log_no_delete` trigger before deleting audit rows, deletes by `tenant_id` (catches all test rows including the book), re-enables trigger. FK-safe order: audit_log → books → tenants.
+- **F-3 (MEDIUM)** `lib/domain/books/preview-isbn.ts`: `assertAiBudget` moved outside `try` block so budget errors propagate. Inner `try` now wraps only `generateObjectViaGateway`. `catch {}` narrowed to `catch (err)` with `console.warn` — no silent swallow.
+- **F-4 (MEDIUM)** `lib/domain/books/update-book.ts`: Added `isNull(books.deletedAt)` to UPDATE WHERE clause. `lib/domain/books/soft-delete-book.ts`: same predicate added so re-deleting already-deleted row affects 0 rows → `BookNotFoundError`.
+- **F-5 (MEDIUM)** `lib/db/schema/_shared.ts`: `createdAt()` / `updatedAt()` helpers changed to `precision: 3` (ms). Migration `drizzle/0005_books_updated_at_precision.sql` ALTERs `books.created_at` and `books.updated_at` to `timestamptz(3)`. One unit test added: `tests/unit/domain/books/update-book.test.ts`.
+- **F-6 (MEDIUM)** `tests/unit/domain/books/sources/merge.test.ts`: Dropped non-load-bearing `"returns empty record and empty diff when both sources are null"` test.
+- **F-10 (LOW)** `tests/unit/domain/books/isbn.test.ts`: Renamed misleading test `"throws IsbnInvalidError for year=1200 equivalent — invalid checksum"` → `"throws IsbnInvalidError when ISBN-13 checksum is wrong"`.
+- **F-11 (LOW)** `drizzle/0004_books_and_isbn_cache.sql`: Removed redundant `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO stack_app;` line (no sequences exist; 0002 default privileges already cover them).
+
+**Deferred (recorded in active.yaml):** F-8 (LIKE wildcard escape — superseded by Spec 05), F-9 (restore-book error specificity), F-12 (Zod gate on cache write), F-13 (preview-isbn comment clarity).
+
+**Verification:** tsc PASS, biome PASS, 20/20 unit tests, 13/13 db:verify, migration 0005 applied.
+
+## 2026-05-21 — Spec 02 Run A: Book Management backend (CRUD + ISBN enrichment + AI gateway stub)
+
+**What changed.**
+
+Full backend implementation of Spec 02 — book management, ISBN enrichment, and AI infrastructure foundations.
+
+**Key changes:**
+
+- **Migration 0004** (`drizzle/0004_books_and_isbn_cache.sql`): `books` + `isbn_cache` tables with RLS FORCE, `assert_tenant()` isolation policies, composite tenant-first indexes, and explicit `stack_app` grants. 13/13 db:verify checks pass.
+- **DB schema** (`lib/db/schema/books.ts`, `isbn-cache.ts`): Drizzle table definitions. `BookId` branded type added to `_shared.ts`.
+- **ISBN domain** (`lib/domain/books/isbn.ts`): `validateIsbn13Checksum`, `isbn10ToIsbn13`, `normalizeIsbn` — pure, no deps.
+- **BookRecord schema** (`lib/domain/books/schemas.ts`): Zod schemas for BookRecord, Create/Update/PreviewIsbn/ListBooks/SoftDelete/Restore inputs. Single source of truth for Server Actions, AI tool args, and client forms.
+- **Source adapters** (`sources/open-library.ts`, `sources/google-books.ts`): `fetch` + `AbortSignal` 3s timeout; HTTP cover URL blocking; OL 404 + GB `totalItems=0` as "not found"; GB 429 as silent degradation.
+- **Merge** (`sources/merge.ts`): OL wins; GB fills gaps; `sourcesDiff.year` for BDD "sources disagree" scenario.
+- **ISBN cache** (`lib/domain/books/isbn-cache.ts`): `getCached` / `putCached` with `ON CONFLICT DO UPDATE`.
+- **Preview orchestrator** (`preview-isbn.ts`): normalize → validate → cache → parallel fan-out → merge → optional LLM → cache → return.
+- **CRUD domain functions**: `create-book.ts` (with audit), `update-book.ts` (optimistic concurrency), `soft-delete-book.ts` (hasActiveLoan stub), `restore-book.ts` (30-day window), `list-books.ts` (soft-delete filter), `get-book.ts`.
+- **Loan stub** (`lib/domain/loans/has-active-loan.ts`): returns `false`, FOLLOW-UP for Spec 03.
+- **AI gateway** (`lib/ai/gateway.ts`): `generateObjectViaGateway` — guards on `AI_GATEWAY_API_KEY`, biome-ignore for `as any` model cast (Spec 11 full wiring).
+- **AI budget** (`lib/ai/budget.ts`): `assertAiBudget` reads `tenants.ai_monthly_cap_usd` via owner pool; throws `AiBudgetNotConfiguredError` if null/zero. Usage accumulation deferred to Spec 11.
+- **Prompt** (`lib/ai/prompts/isbn-enrich.md`): versioned prompt (v1.0) with YAML frontmatter.
+- **Server Actions** (`app/(app)/books/actions.ts`): `previewIsbnAction`, `createBookAction`, `updateBookAction`, `softDeleteBookAction`, `restoreBookAction`. Each: schema → permission gate → withTenantTx → domain fn → revalidateTag.
+- **`handleServerError`** (`lib/auth/safe-action.ts`): extended with `BookNotFoundError→404`, `OptimisticConcurrencyError→409`, `BookHasActiveLoanError→422`, `IsbnInvalidError→422`.
+- **Tests**: 7 unit tests (isbn.test.ts: 4, merge.test.ts: 4), integration test (create-book.test.ts, skipped when DB env absent).
+- **Verification**: `scripts/verify-foundation.mjs` check #12 — books RLS cross-tenant probe.
+
+**Decisions that diverged from prompt:**
+- `revalidateTag` in Next.js 16 requires a second `profile` argument (breaking change vs. Next 15). Used `"default"` profile for all book cache invalidations.
+- `biome-ignore lint/suspicious/noExplicitAny` used on gateway `model` cast — necessary because Vercel AI Gateway full provider setup (`createGateway()`) deferred to Spec 11.
+- `BookId` branded type co-located in `lib/db/schema/_shared.ts` (not in `books.ts`) for consistency with `TenantId` / `UserId`.
+
+**Verification:** `tsc --noEmit` PASS, `biome check .` PASS, `pnpm test:unit` 20/20 PASS, `pnpm db:apply 0004_books_and_isbn_cache` PASS (applied to Neon branch), `pnpm db:verify` 13/13 PASS.
+
 ## 2026-05-21 — Auth0 JWT shape pivot: roles in JWT, ROLE_PERMISSIONS table in TS
 
 **Why.** The Auth0 Post-Login Action snippet originally suggested setting `permissions` from `event.authorization.permissions` — but that field does not exist on Auth0's `event.authorization` type (`{ roles: string[] }` only). Dashboard TS check refused to save the Action. Three options considered: (a) call Management API per login (slow), (b) duplicate the role/permission matrix as JS inside the Action (drift risk), (c) carry roles in JWT and resolve to permissions in TypeScript. Chose (c) — single source of truth in `lib/auth/permission.ts`.

@@ -2,11 +2,13 @@ version: 1
 updated: "2026-05-21"
 
 current_focus:
-  - "Spec 01 COMPLETE (Run A + Run B + Run B-fix). Foundation production-ready against real Neon branch: 12/12 db:verify, 9/9 unit, biome, typecheck. Cross-tenant probe + org_id resolver + audit + provisioning + CASL all verified. Ready for Spec 02 (book management + AI ISBN enrichment)."
+  - "Spec 02 Run A COMPLETE. Books domain: schema, migration 0004, ISBN validation, Open Library + Google Books fan-out, merge with sourcesDiff, isbn_cache, preview-isbn orchestrator, CRUD domain functions, Server Actions, AI gateway stub (lib/ai/gateway.ts + lib/ai/budget.ts). 13/13 db:verify, 20/20 unit tests, biome + typecheck green."
   - "Stack target architecture: Next.js 16 + Vercel + Neon Postgres + pgvector + Auth0 Organizations + Vercel AI Gateway"
   - "Multi-tenant SaaS library platform — assignment for Valsoft AI Engineering Manager role"
 
 recent_changes:
+  - "2026-05-21: Spec 02 Run A-fix landed — critic findings F-1 through F-11 addressed. previewIsbnAction permission book:read→ai:use_enrich (HIGH). Integration test afterAll trigger-safe cleanup (HIGH). assertAiBudget moved outside try in preview-isbn (MEDIUM). isNull(deletedAt) predicate added to updateBook+softDeleteBook WHERE (MEDIUM). _shared.ts timestamps→precision:3 + migration 0005 + 1 unit test for ms round-trip (MEDIUM). Dropped non-load-bearing merge null test (MEDIUM). Renamed misleading isbn test (LOW). Removed redundant sequence GRANT in 0004 (LOW). tsc PASS, biome PASS, 20/20 unit tests, 13/13 db:verify."
+  - "2026-05-21: Spec 02 Run A landed — books + isbn_cache tables with RLS, ISBN validation, OL+GB fan-out with merge/sourcesDiff, isbn_cache, preview-isbn, CRUD domain functions, Server Actions, AI gateway + budget stubs. 13/13 db:verify (incl. Spec 02 check #12), 20/20 unit tests, biome + typecheck green. `ai` v6 added. BookId brand in _shared.ts. handleServerError extended with book domain errors."
   - "2026-05-21: Auth0 JWT shape pivot — roles in JWT, ROLE_PERMISSIONS table in lib/auth/permission.ts resolves to permissions. Forced by Auth0's `event.authorization` type (only carries roles[], no permissions[]). buildAbility now takes roles[]; Session.roles replaces Session.permissions. Action snippet in tests/integration/_README.md fixed. 12/12 db:verify, 9/9 unit, biome + typecheck green."
   - "2026-05-21: Spec 01 Run B-fix landed — critic caught the builder's own deferral as a runtime CRITICAL (org_id text vs uuid). Resolver + cache + audit override + metadata gate + handleServerError branches all done. 12/12 db:verify, 9/9 unit, biome + typecheck green."
   - "2026-05-21: Spec 01 Run B landed — Auth0 wiring + CASL Ability + audit writer + tenant provisioning + 0003 tenants RLS migration. 8/8 unit tests. Critic-opus flagged 1 CRITICAL + 3 HIGH + 6 MEDIUM."
@@ -63,7 +65,12 @@ patterns_active:
   - "Evals as CI gates; cross-tenant probe in every AI eval set"
 
 next_steps:
-  - "Spec 02 — book management (CRUD + AI ISBN enrichment + Open Library/Google Books fan-out). Foundation is verified against real Neon; Spec 02 builds on confirmed-working auth + audit + RLS layers."
+  - "Spec 03 — Circulation (loans, holds, checkout, checkin). Has-active-loan stub in lib/domain/loans/has-active-loan.ts needs replacing with real query against loans table."
+  - "FOLLOW-UP (F-8, LOW): list-books.ts LIKE wildcard escape — escape % and _ in query before wrapping in %…%. Superseded if Spec 05 full-text search replaces LIKE."
+  - "FOLLOW-UP (F-9, LOW): restore-book.ts error specificity — distinguish not-found vs not-deleted vs past-retention-window before throwing BookNotFoundError."
+  - "FOLLOW-UP (F-12, LOW): preview-isbn.ts — validate cache write payload through BookRecordSchema.partial().safeParse() before putCached; log+skip on failure."
+  - "FOLLOW-UP (F-13, LOW): preview-isbn.ts comment clarity — build record explicitly rather than spread-then-override."
+  - "Spec 05 — Search/Discovery. book.created/book.updated domain events need emitting from create-book.ts, update-book.ts, restore-book.ts (currently TODO-commented). tsvector + pgvector embedding columns to be added to books table."
   - "User: deploy Auth0 Post-Login Action in dashboard so JWT carries org_id + roles[]. Corrected action code (no permissions field — Auth0 only exposes roles) is in tests/integration/_README.md. Required for end-to-end login flow but not for Spec 02 code/tests."
   - "User: in Auth0 dashboard → Organizations → <demo org> → Roles, create the five roles system_owner / tenant_admin / librarian / member / guest, and assign at least one org member the tenant_admin role."
   - "User: rotate stack_app password before any non-local deploy."
