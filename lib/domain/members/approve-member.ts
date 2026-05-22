@@ -25,6 +25,7 @@ import { OptimisticConcurrencyError } from "@/lib/domain/books/errors";
 import { and, eq } from "drizzle-orm";
 import { canBorrow } from "./can-borrow";
 import { MemberAlreadyApprovedError, MemberNotFoundError, MemberNotPendingError } from "./errors";
+import { generateCardNumber } from "./generate-card-number";
 import type { ApproveMemberInput } from "./schemas";
 
 export interface ApproveMemberResult {
@@ -69,6 +70,8 @@ export async function approveMember(
 
   const now = new Date();
   const newStatus = "active" as const;
+  // Generate the card number from the member's own id (deterministic, stable).
+  const cardNumber = generateCardNumber(input.memberId);
 
   // 4. Transition → active.
   const [updated] = await tx
@@ -81,6 +84,7 @@ export async function approveMember(
       rejectedAt: null,
       rejectedBy: null,
       rejectionReason: null,
+      cardNumber,
       updatedAt: now,
     })
     .where(

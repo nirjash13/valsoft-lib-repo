@@ -42,6 +42,11 @@ export function ComposeBatch() {
     sent: number;
     failed: number;
   } | null>(null);
+  // §7 edge case: audience-changed warning state
+  const [audienceChangedWarning, setAudienceChangedWarning] = useState<{
+    sendTimeCount: number;
+    draftedCount: number;
+  } | null>(null);
 
   // ---------------------------------------------------------------------------
   // Live token validation (REQ-07-06)
@@ -76,7 +81,20 @@ export function ComposeBatch() {
   } = useAction(sendBatchEmailAction, {
     onSuccess: ({ data }) => {
       if (!data) return;
-      setSendResult(data);
+      if (data.audienceChanged === true) {
+        // §7 edge case: audience drifted — surface warning instead of sending.
+        setAudienceChangedWarning({
+          sendTimeCount: data.sendTimeCount ?? 0,
+          draftedCount: data.draftedCount ?? recipientCount ?? 0,
+        });
+      } else if (data.audienceChanged === false) {
+        setSendResult({
+          batchId: data.batchId ?? "",
+          sent: data.sent ?? 0,
+          failed: data.failed ?? 0,
+        });
+        setAudienceChangedWarning(null);
+      }
     },
   });
 
@@ -84,12 +102,14 @@ export function ComposeBatch() {
   const draftServerError = parseServerError(draftResult.serverError);
   const sendServerError = parseServerError(sendActionResult.serverError);
 
-  // Disable send when: no draft, warnings exist, currently sending, or already sent
+  // Disable send when: no draft, warnings exist, currently sending, already sent,
+  // or audience-changed warning is displayed (librarian must dismiss it first).
   const canSend =
     draft !== null &&
     tokenWarnings.length === 0 &&
     !isSending &&
     sendResult === null &&
+    audienceChangedWarning === null &&
     subject.trim().length > 0 &&
     body.trim().length > 0;
 
@@ -98,13 +118,18 @@ export function ComposeBatch() {
     executeDraft({ audienceFilter, intent });
   }
 
-  function handleSend() {
+  function handleSend(overrideAudienceChanged = false) {
     if (!canSend) return;
+    // Clear any prior audience-changed warning when re-confirming.
+    if (overrideAudienceChanged) setAudienceChangedWarning(null);
     executeSend({
       audienceFilter,
       subject: subject.trim(),
       bodyMarkdown: body.trim(),
       aiDrafted: draft !== null,
+      // Pass null when overriding (user acknowledged audience change) so the
+      // second attempt skips the count comparison and proceeds to send.
+      draftedRecipientCount: overrideAudienceChanged ? null : recipientCount,
     });
   }
 
@@ -267,11 +292,46 @@ export function ComposeBatch() {
             ))}
           </output>
 
+          {/* §7 audience-changed warning — shown before the send button */}
+          {audienceChangedWarning !== null && (
+            <div
+              role="alert"
+              className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 p-4 space-y-3"
+            >
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                Audience changed since you drafted this
+              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                {audienceChangedWarning.sendTimeCount} recipient
+                {audienceChangedWarning.sendTimeCount === 1 ? "" : "s"} now vs{" "}
+                {audienceChangedWarning.draftedCount} when drafted. Send anyway?
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleSend(true)}
+                  disabled={isSending}
+                  className="inline-flex items-center gap-2 rounded-md bg-amber-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-busy={isSending}
+                >
+                  {isSending ? "Sending…" : "Send anyway"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAudienceChangedWarning(null)}
+                  className="text-sm text-text-secondary hover:text-text-primary underline-offset-2 hover:underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Send button + result */}
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={handleSend}
+              onClick={() => handleSend(false)}
               disabled={!canSend}
               className="inline-flex items-center gap-2 rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               aria-busy={isSending}

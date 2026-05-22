@@ -80,8 +80,11 @@ export async function executeReportQuery(
   if (dimension && query.filter && query.filter[dimension]) {
     const filterVal = query.filter[dimension];
     querySql = sql`SELECT * FROM ${sql.raw(viewName)} WHERE ${sql.raw(dimension)} = ${filterVal}`;
-    virtualSql += ` WHERE ${dimension} = ?`;
+    virtualSql += ` WHERE ${dimension} = '${filterVal}'`;
   }
+
+  // Append transparency comment: period is applied via set_config inside the view; tenant via RLS.
+  virtualSql += ` -- period: ${query.period} (applied via app.current_period); tenant scoped via RLS`;
 
   const result = await tx.execute(querySql);
 
@@ -96,10 +99,28 @@ export async function executeReportQuery(
 // ---------------------------------------------------------------------------
 
 export async function getOverviewDashboard(tx: TxClient) {
-  const [kpiRes, topCirculatedRes, circulationRes] = await Promise.all([
+  const [
+    kpiRes,
+    topCirculatedRes,
+    activeByDayRes,
+    overdueByDayRes,
+    holdsQueuedByDayRes,
+    signupsByDayRes,
+    drillActiveRes,
+    drillOverdueRes,
+    drillHoldsRes,
+    drillSignupsRes,
+  ] = await Promise.all([
     tx.execute(sql`SELECT * FROM reporting.overview_kpis`),
     tx.execute(sql`SELECT * FROM reporting.top_circulated_this_week`),
-    tx.execute(sql`SELECT * FROM reporting.circulation_by_day`),
+    tx.execute(sql`SELECT * FROM reporting.kpi_active_loans_by_day`),
+    tx.execute(sql`SELECT * FROM reporting.kpi_overdue_loans_by_day`),
+    tx.execute(sql`SELECT * FROM reporting.kpi_holds_queued_by_day`),
+    tx.execute(sql`SELECT * FROM reporting.kpi_signups_by_day`),
+    tx.execute(sql`SELECT * FROM reporting.drill_active_loans`),
+    tx.execute(sql`SELECT * FROM reporting.drill_overdue_loans`),
+    tx.execute(sql`SELECT * FROM reporting.drill_holds_queued`),
+    tx.execute(sql`SELECT * FROM reporting.drill_signups_today`),
   ]);
 
   return {
@@ -117,11 +138,46 @@ export async function getOverviewDashboard(tx: TxClient) {
       authors: string[];
       checkout_count: number;
     }[],
-    circulationHistory: circulationRes.rows as {
-      date: string;
-      checkout_count: number;
-      return_count: number;
-      hold_count: number;
+    // Per-KPI 30-day daily series for sparklines
+    activeByDay: activeByDayRes.rows as { date: string; active_count: number }[],
+    overdueByDay: overdueByDayRes.rows as { date: string; overdue_count: number }[],
+    holdsQueuedByDay: holdsQueuedByDayRes.rows as { date: string; holds_count: number }[],
+    signupsByDay: signupsByDayRes.rows as { date: string; signup_count: number }[],
+    // Drill-down detail sets
+    drillActiveLoans: drillActiveRes.rows as {
+      loan_id: string;
+      title: string;
+      isbn: string;
+      display_name: string;
+      email: string;
+      checked_out_at: string;
+      due_at: string;
+    }[],
+    drillOverdueLoans: drillOverdueRes.rows as {
+      loan_id: string;
+      title: string;
+      isbn: string;
+      display_name: string;
+      email: string;
+      checked_out_at: string;
+      due_at: string;
+      days_overdue: number;
+    }[],
+    drillHoldsQueued: drillHoldsRes.rows as {
+      hold_id: string;
+      title: string;
+      isbn: string;
+      display_name: string;
+      email: string;
+      queued_at: string;
+      status: string;
+    }[],
+    drillSignupsToday: drillSignupsRes.rows as {
+      member_id: string;
+      display_name: string;
+      email: string;
+      status: string;
+      created_at: string;
     }[],
   };
 }

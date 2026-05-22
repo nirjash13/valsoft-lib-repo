@@ -129,58 +129,77 @@ export const sendBatchEmailAction = actionClient
   .schema(SendBatchEmailSchema)
   .metadata({ permission: "email:send" })
   .action(async ({ parsedInput, ctx }) => {
-    const { audienceFilter, subject, bodyMarkdown, aiDrafted } = parsedInput;
+    const { audienceFilter, subject, bodyMarkdown, aiDrafted, draftedRecipientCount } = parsedInput;
     const tenantId = ctx.tenantCtx.tenantId;
 
     // Step 1: short tx — setup only, no network calls.
-    const { batchId, recipients, libraryName } = await withTenantTx(
-      ctx.tenantCtx,
-      async (tx, txCtx) => {
-        // Re-fetch audience — the window may have shifted since the draft step.
-        const audienceRecipients = await getAudiencePreview(tx, txCtx, audienceFilter);
+    const step1 = await withTenantTx(ctx.tenantCtx, async (tx, txCtx) => {
+      // Re-fetch audience — the window may have shifted since the draft step.
+      const audienceRecipients = await getAudiencePreview(tx, txCtx, audienceFilter);
 
-        // Resolve the caller's member UUID for the createdBy FK.
-        const callerMember = await getMemberByUserId(tx, txCtx, ctx.session.sub);
-        if (!callerMember) {
-          throw new Error("Caller has no linked member row in this tenant");
-        }
-
-        // Volume cap check — once up front, before any sends.
-        await assertEmailVolume(tx, txCtx);
-
-        // Resolve library name for the send step.
-        const [tenantRow] = await tx
-          .select({ name: tenants.name })
-          .from(tenants)
-          .where(eq(tenants.id, txCtx.tenantId));
-        const resolvedLibraryName = tenantRow?.name ?? "Stack Library";
-
-        // Insert the email_batches record.
-        const [batchRow] = await tx
-          .insert(emailBatches)
-          .values({
-            tenantId: txCtx.tenantId,
-            createdBy: callerMember.id,
-            audienceFilter,
-            subject,
-            bodyMarkdown,
-            recipientCount: audienceRecipients.length,
-            aiDrafted,
-            status: "sent", // will be updated after sendBatch
-          })
-          .returning({ id: emailBatches.id });
-
-        if (!batchRow) {
-          throw new Error("Failed to insert email_batches row");
-        }
-
+      // §7 edge case: if the audience changed since the draft was generated,
+      // return early with a typed signal so the UI can warn the librarian.
+      // Only compare when draftedRecipientCount is provided (i.e. an AI draft was taken).
+      if (draftedRecipientCount !== null && audienceRecipients.length !== draftedRecipientCount) {
         return {
-          batchId: batchRow.id,
-          recipients: audienceRecipients,
-          libraryName: resolvedLibraryName,
+          audienceChanged: true as const,
+          sendTimeCount: audienceRecipients.length,
         };
-      },
-    );
+      }
+
+      // Resolve the caller's member UUID for the createdBy FK.
+      const callerMember = await getMemberByUserId(tx, txCtx, ctx.session.sub);
+      if (!callerMember) {
+        throw new Error("Caller has no linked member row in this tenant");
+      }
+
+      // Volume cap check — once up front, before any sends.
+      await assertEmailVolume(tx, txCtx);
+
+      // Resolve library name for the send step.
+      const [tenantRow] = await tx
+        .select({ name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, txCtx.tenantId));
+      const resolvedLibraryName = tenantRow?.name ?? "Stack Library";
+
+      // Insert the email_batches record.
+      const [batchRow] = await tx
+        .insert(emailBatches)
+        .values({
+          tenantId: txCtx.tenantId,
+          createdBy: callerMember.id,
+          audienceFilter,
+          subject,
+          bodyMarkdown,
+          recipientCount: audienceRecipients.length,
+          aiDrafted,
+          status: "sent", // will be updated after sendBatch
+        })
+        .returning({ id: emailBatches.id });
+
+      if (!batchRow) {
+        throw new Error("Failed to insert email_batches row");
+      }
+
+      return {
+        audienceChanged: false as const,
+        batchId: batchRow.id,
+        recipients: audienceRecipients,
+        libraryName: resolvedLibraryName,
+      };
+    });
+
+    // §7 audience-changed: return without sending so the UI can show a warning.
+    if (step1.audienceChanged) {
+      return {
+        audienceChanged: true,
+        sendTimeCount: step1.sendTimeCount,
+        draftedCount: draftedRecipientCount,
+      };
+    }
+
+    const { batchId, recipients, libraryName } = step1;
 
     // Step 2: send OUTSIDE any transaction — sendBatch manages its own short txs.
     const { sent, failed } = await sendBatch({
@@ -211,5 +230,5 @@ export const sendBatchEmailAction = actionClient
     // Post-commit: invalidate the emails cache tag for the tenant.
     revalidateTag(`tenant:${tenantId}:emails`, "default");
 
-    return { batchId, sent, failed };
+    return { audienceChanged: false, batchId, sent, failed };
   });

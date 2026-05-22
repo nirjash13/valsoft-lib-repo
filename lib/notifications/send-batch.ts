@@ -3,6 +3,7 @@ import { withSystemTenantTx } from "@/lib/db/with-system-tenant-tx";
 import { sendEmail } from "@/lib/notifications/email-client";
 import { EmailSendError } from "@/lib/notifications/errors";
 import { interpolate } from "@/lib/notifications/interpolate";
+import { markdownToHtml } from "@/lib/notifications/markdown-to-html";
 import { signUnsubscribeToken } from "@/lib/notifications/unsubscribe-token";
 import { eq } from "drizzle-orm";
 import { recordEmail } from "./record-email";
@@ -117,6 +118,9 @@ export async function sendBatch(params: SendBatchParams): Promise<SendBatchResul
 
       // Step 2: render + send — NO transaction open. Per-recipient try/catch.
       const interpolatedBody = interpolate(bodyTemplate, vars);
+      // Convert the interpolated Markdown body to sanitized HTML before passing
+      // to the template, which renders it via dangerouslySetInnerHTML (REQ-07-07).
+      const bodyHtml = markdownToHtml(interpolatedBody);
       const token = signUnsubscribeToken(recipient.memberId);
       const unsubscribeUrl = `${appUrl}/unsubscribe?token=${token}`;
 
@@ -124,7 +128,7 @@ export async function sendBatch(params: SendBatchParams): Promise<SendBatchResul
       try {
         html = await renderBatchReminder({
           subjectLine: interpolatedSubject,
-          bodyHtml: interpolatedBody,
+          bodyHtml,
           libraryName,
           unsubscribeUrl,
         });

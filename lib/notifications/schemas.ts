@@ -74,6 +74,13 @@ export const SendBatchEmailSchema = z.object({
     .min(1, "Body is required")
     .max(4000, "Body must be 4000 characters or less"),
   aiDrafted: z.boolean(),
+  /**
+   * The recipient count at draft time (from draftBatchEmailAction).
+   * Compared against the send-time audience count to detect audience drift
+   * (§7 edge case: two librarians composing concurrently).
+   * Null means the email was manually composed without a prior AI draft step.
+   */
+  draftedRecipientCount: z.number().int().nonnegative().nullable(),
 });
 
 export type SendBatchEmailInput = z.infer<typeof SendBatchEmailSchema>;

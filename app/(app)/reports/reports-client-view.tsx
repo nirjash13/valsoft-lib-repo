@@ -46,11 +46,46 @@ interface ReportsClientViewProps {
         authors: string[];
         checkout_count: number;
       }[];
-      circulationHistory: {
-        date: string;
-        checkout_count: number;
-        return_count: number;
-        hold_count: number;
+      // Per-KPI 30-day daily series
+      activeByDay: { date: string; active_count: number }[];
+      overdueByDay: { date: string; overdue_count: number }[];
+      holdsQueuedByDay: { date: string; holds_count: number }[];
+      signupsByDay: { date: string; signup_count: number }[];
+      // Drill-down detail sets
+      drillActiveLoans: {
+        loan_id: string;
+        title: string;
+        isbn: string;
+        display_name: string;
+        email: string;
+        checked_out_at: string;
+        due_at: string;
+      }[];
+      drillOverdueLoans: {
+        loan_id: string;
+        title: string;
+        isbn: string;
+        display_name: string;
+        email: string;
+        checked_out_at: string;
+        due_at: string;
+        days_overdue: number;
+      }[];
+      drillHoldsQueued: {
+        hold_id: string;
+        title: string;
+        isbn: string;
+        display_name: string;
+        email: string;
+        queued_at: string;
+        status: string;
+      }[];
+      drillSignupsToday: {
+        member_id: string;
+        display_name: string;
+        email: string;
+        status: string;
+        created_at: string;
       }[];
     };
     circulation: {
@@ -675,8 +710,7 @@ function SvgSingleLineChart({ data }: SvgSingleLineChartProps) {
           }}
         >
           <p className="font-semibold text-text-secondary">
-            Week of{" "}
-            {(() => {
+            Week of {(() => {
               const hoveredWeekStr = data[hoveredIdx]?.week_start;
               return hoveredWeekStr
                 ? new Date(hoveredWeekStr).toLocaleDateString(undefined, {
@@ -819,9 +853,7 @@ function SvgBarChart({ data, xKey, yKey }: SvgBarChartProps) {
           >
             <p className="font-semibold text-text-secondary capitalize">{hoveredBar.label}</p>
             <p className="text-accent text-body font-bold mt-0.5">
-              {yKey === "ai_cost_usd"
-                ? `$${hoveredBar.value.toFixed(4)}`
-                : hoveredBar.value}
+              {yKey === "ai_cost_usd" ? `$${hoveredBar.value.toFixed(4)}` : hoveredBar.value}
             </p>
           </div>
         );
@@ -878,55 +910,61 @@ export function ReportsClientView({
     endDate: "",
   });
 
-  // KPI Calculations (Overview sparklines + deltas)
+  // KPI Calculations (Overview sparklines + deltas) — each tile uses its own metric series
   const {
-    checkoutSparkline,
-    checkoutDelta,
-    returnSparkline,
-    returnDelta,
-    holdSparkline,
-    holdDelta,
+    activeSparkline,
+    activeDelta,
+    overdueSparkline,
+    overdueDelta,
+    holdsSparkline,
+    holdsDelta,
     signupSparkline,
     signupDelta,
   } = useMemo(() => {
-    const history = initialData.overview.circulationHistory;
+    // Active loans — own 30-day series, last 14 vs prior 14
+    const activeLast14 = initialData.overview.activeByDay.slice(-14).map((d) => d.active_count);
+    const activePrev14 = initialData.overview.activeByDay
+      .slice(-28, -14)
+      .map((d) => d.active_count);
+    const sumA14 = activeLast14.reduce((s, c) => s + c, 0);
+    const sumAP14 = activePrev14.reduce((s, c) => s + c, 0);
+    const activeDelta = calculateDelta(sumA14, sumAP14);
 
-    // Checkouts (last 14 vs previous 14)
-    const checkoutsLast14 = history.slice(-14).map((d) => d.checkout_count);
-    const checkoutsPrev14 = history.slice(-28, -14).map((d) => d.checkout_count);
-    const sumC14 = checkoutsLast14.reduce((s, c) => s + c, 0);
-    const sumCP14 = checkoutsPrev14.reduce((s, c) => s + c, 0);
-    const checkoutDelta = calculateDelta(sumC14, sumCP14);
+    // Overdue loans — own series
+    const overdueLast14 = initialData.overview.overdueByDay.slice(-14).map((d) => d.overdue_count);
+    const overduePrev14 = initialData.overview.overdueByDay
+      .slice(-28, -14)
+      .map((d) => d.overdue_count);
+    const sumO14 = overdueLast14.reduce((s, c) => s + c, 0);
+    const sumOP14 = overduePrev14.reduce((s, c) => s + c, 0);
+    const overdueDelta = calculateDelta(sumO14, sumOP14);
 
-    // Returns
-    const returnsLast14 = history.slice(-14).map((d) => d.return_count);
-    const returnsPrev14 = history.slice(-28, -14).map((d) => d.return_count);
-    const sumR14 = returnsLast14.reduce((s, r) => s + r, 0);
-    const sumRP14 = returnsPrev14.reduce((s, r) => s + r, 0);
-    const returnDelta = calculateDelta(sumR14, sumRP14);
-
-    // Holds
-    const holdsLast14 = history.slice(-14).map((d) => d.hold_count);
-    const holdsPrev14 = history.slice(-28, -14).map((d) => d.hold_count);
+    // Holds queued — own series
+    const holdsLast14 = initialData.overview.holdsQueuedByDay.slice(-14).map((d) => d.holds_count);
+    const holdsPrev14 = initialData.overview.holdsQueuedByDay
+      .slice(-28, -14)
+      .map((d) => d.holds_count);
     const sumH14 = holdsLast14.reduce((s, h) => s + h, 0);
     const sumHP14 = holdsPrev14.reduce((s, h) => s + h, 0);
-    const holdDelta = calculateDelta(sumH14, sumHP14);
+    const holdsDelta = calculateDelta(sumH14, sumHP14);
 
-    // Signups (from members history week-by-week)
-    const memberSignups = initialData.members.signupsHistory;
-    const signupSparkline = memberSignups.slice(-6).map((d) => d.signup_count);
-    const currentWeekSignups = signupSparkline[signupSparkline.length - 1] ?? 0;
-    const prevWeekSignups = signupSparkline[signupSparkline.length - 2] ?? 0;
-    const signupDelta = calculateDelta(currentWeekSignups, prevWeekSignups);
+    // Signups — own series (daily, last 14 vs prior 14)
+    const signupsLast14 = initialData.overview.signupsByDay.slice(-14).map((d) => d.signup_count);
+    const signupsPrev14 = initialData.overview.signupsByDay
+      .slice(-28, -14)
+      .map((d) => d.signup_count);
+    const sumS14 = signupsLast14.reduce((s, c) => s + c, 0);
+    const sumSP14 = signupsPrev14.reduce((s, c) => s + c, 0);
+    const signupDelta = calculateDelta(sumS14, sumSP14);
 
     return {
-      checkoutSparkline: checkoutsLast14,
-      checkoutDelta,
-      returnSparkline: returnsLast14,
-      returnDelta,
-      holdSparkline: holdsLast14,
-      holdDelta,
-      signupSparkline,
+      activeSparkline: activeLast14,
+      activeDelta,
+      overdueSparkline: overdueLast14,
+      overdueDelta,
+      holdsSparkline: holdsLast14,
+      holdsDelta,
+      signupSparkline: signupsLast14,
       signupDelta,
     };
   }, [initialData]);
@@ -1016,32 +1054,42 @@ export function ReportsClientView({
     }
   };
 
-  // Drilldown list filtering
+  // Drilldown list filtering — each tile uses its own metric-specific detail dataset
   const drillDownFilteredItems = useMemo(() => {
     if (!activeDrillDown) return [];
     const search = drillDownSearch.toLowerCase().trim();
 
-    if (activeDrillDown === "active_loans" || activeDrillDown === "holds_queued") {
-      const books = initialData.circulation.topBooks;
-      if (!search) return books;
-      return books.filter(
-        (b) => b.title.toLowerCase().includes(search) || b.isbn.toLowerCase().includes(search),
+    if (activeDrillDown === "active_loans") {
+      const loans = initialData.overview.drillActiveLoans;
+      if (!search) return loans;
+      return loans.filter(
+        (l) =>
+          l.title.toLowerCase().includes(search) || l.display_name.toLowerCase().includes(search),
       );
     }
 
     if (activeDrillDown === "overdue_loans") {
-      const borrowers = initialData.circulation.topBorrowers;
-      if (!search) return borrowers;
-      return borrowers.filter(
-        (b) =>
-          b.display_name.toLowerCase().includes(search) || b.email.toLowerCase().includes(search),
+      const loans = initialData.overview.drillOverdueLoans;
+      if (!search) return loans;
+      return loans.filter(
+        (l) =>
+          l.title.toLowerCase().includes(search) || l.display_name.toLowerCase().includes(search),
+      );
+    }
+
+    if (activeDrillDown === "holds_queued") {
+      const holds = initialData.overview.drillHoldsQueued;
+      if (!search) return holds;
+      return holds.filter(
+        (h) =>
+          h.title.toLowerCase().includes(search) || h.display_name.toLowerCase().includes(search),
       );
     }
 
     if (activeDrillDown === "signups_today") {
-      const churn = initialData.members.churnProxy;
-      if (!search) return churn;
-      return churn.filter(
+      const members = initialData.overview.drillSignupsToday;
+      if (!search) return members;
+      return members.filter(
         (m) =>
           m.display_name.toLowerCase().includes(search) || m.email.toLowerCase().includes(search),
       );
@@ -1197,22 +1245,11 @@ export function ReportsClientView({
             {nlChartConfig && nlResult.rows.length > 0 && (
               <div className="border border-border-subtle rounded-lg p-4 bg-surface-2 max-w-[800px]">
                 <h4 className="text-meta text-text-secondary font-semibold mb-4">Visualization</h4>
-                {nlChartConfig.chartType === "bar" ? (
-                  <SvgBarChart
-                    data={nlResult.rows}
-                    xKey={nlChartConfig.xKey}
-                    yKey={nlChartConfig.yKey}
-                  />
-                ) : (
-                  <div className="text-meta text-text-secondary italic py-6 text-center">
-                    (Line chart rendering for dimension {nlChartConfig.xKey})
-                    <SvgBarChart
-                      data={nlResult.rows}
-                      xKey={nlChartConfig.xKey}
-                      yKey={nlChartConfig.yKey}
-                    />
-                  </div>
-                )}
+                <SvgBarChart
+                  data={nlResult.rows}
+                  xKey={nlChartConfig.xKey}
+                  yKey={nlChartConfig.yKey}
+                />
               </div>
             )}
 
@@ -1331,17 +1368,17 @@ export function ReportsClientView({
                   </span>
                 </div>
                 <div className="flex items-center justify-between mt-4 pt-2 border-t border-border-subtle/50">
-                  <div className="text-[10px] text-text-tertiary">14-day Activity</div>
+                  <div className="text-[10px] text-text-tertiary">14-day Active</div>
                   <div className="flex items-center gap-2">
                     <Sparkline
-                      data={checkoutSparkline}
-                      color={checkoutDelta >= 0 ? "success" : "danger"}
+                      data={activeSparkline}
+                      color={activeDelta >= 0 ? "success" : "danger"}
                     />
                     <span
-                      className={`text-caption font-bold ${checkoutDelta >= 0 ? "text-success" : "text-danger"}`}
+                      className={`text-caption font-bold ${activeDelta >= 0 ? "text-success" : "text-danger"}`}
                     >
-                      {checkoutDelta >= 0 ? "+" : ""}
-                      {checkoutDelta}%
+                      {activeDelta >= 0 ? "+" : ""}
+                      {activeDelta}%
                     </span>
                   </div>
                 </div>
@@ -1380,17 +1417,17 @@ export function ReportsClientView({
                   </span>
                 </div>
                 <div className="flex items-center justify-between mt-4 pt-2 border-t border-border-subtle/50">
-                  <div className="text-[10px] text-text-tertiary">14-day Returns</div>
+                  <div className="text-[10px] text-text-tertiary">14-day Overdue</div>
                   <div className="flex items-center gap-2">
                     <Sparkline
-                      data={returnSparkline}
-                      color={returnDelta >= 0 ? "success" : "danger"}
+                      data={overdueSparkline}
+                      color={overdueDelta <= 0 ? "success" : "danger"}
                     />
                     <span
-                      className={`text-caption font-bold ${returnDelta >= 0 ? "text-success" : "text-danger"}`}
+                      className={`text-caption font-bold ${overdueDelta <= 0 ? "text-success" : "text-danger"}`}
                     >
-                      {returnDelta >= 0 ? "+" : ""}
-                      {returnDelta}%
+                      {overdueDelta >= 0 ? "+" : ""}
+                      {overdueDelta}%
                     </span>
                   </div>
                 </div>
@@ -1429,12 +1466,15 @@ export function ReportsClientView({
                 <div className="flex items-center justify-between mt-4 pt-2 border-t border-border-subtle/50">
                   <div className="text-[10px] text-text-tertiary">14-day Holds</div>
                   <div className="flex items-center gap-2">
-                    <Sparkline data={holdSparkline} color={holdDelta >= 0 ? "success" : "danger"} />
+                    <Sparkline
+                      data={holdsSparkline}
+                      color={holdsDelta >= 0 ? "success" : "danger"}
+                    />
                     <span
-                      className={`text-caption font-bold ${holdDelta >= 0 ? "text-success" : "text-danger"}`}
+                      className={`text-caption font-bold ${holdsDelta >= 0 ? "text-success" : "text-danger"}`}
                     >
-                      {holdDelta >= 0 ? "+" : ""}
-                      {holdDelta}%
+                      {holdsDelta >= 0 ? "+" : ""}
+                      {holdsDelta}%
                     </span>
                   </div>
                 </div>
@@ -1514,52 +1554,71 @@ export function ReportsClientView({
                   <div className="overflow-x-auto border border-border-subtle rounded-lg">
                     <table className="w-full text-left text-meta text-text-secondary">
                       <thead className="bg-surface-2 text-text-primary border-b border-border-subtle">
-                        {activeDrillDown === "active_loans" ||
-                        activeDrillDown === "holds_queued" ? (
+                        {activeDrillDown === "active_loans" ? (
                           <tr>
                             <th className="p-3 font-semibold">Title</th>
-                            <th className="p-3 font-semibold">ISBN</th>
-                            <th className="p-3 font-semibold">Checkouts</th>
-                            <th className="p-3 font-semibold">Holds</th>
+                            <th className="p-3 font-semibold">Member</th>
+                            <th className="p-3 font-semibold">Checked Out</th>
+                            <th className="p-3 font-semibold">Due</th>
                           </tr>
                         ) : activeDrillDown === "overdue_loans" ? (
                           <tr>
-                            <th className="p-3 font-semibold">Name</th>
-                            <th className="p-3 font-semibold">Email</th>
-                            <th className="p-3 font-semibold">Total Loans</th>
-                            <th className="p-3 font-semibold">Overdue count</th>
+                            <th className="p-3 font-semibold">Title</th>
+                            <th className="p-3 font-semibold">Member</th>
+                            <th className="p-3 font-semibold">Due</th>
+                            <th className="p-3 font-semibold">Days Overdue</th>
+                          </tr>
+                        ) : activeDrillDown === "holds_queued" ? (
+                          <tr>
+                            <th className="p-3 font-semibold">Title</th>
+                            <th className="p-3 font-semibold">Member</th>
+                            <th className="p-3 font-semibold">Queued At</th>
+                            <th className="p-3 font-semibold">Status</th>
                           </tr>
                         ) : (
                           <tr>
                             <th className="p-3 font-semibold">Name</th>
                             <th className="p-3 font-semibold">Email</th>
-                            <th className="p-3 font-semibold">Member Since</th>
+                            <th className="p-3 font-semibold">Signed Up</th>
+                            <th className="p-3 font-semibold">Status</th>
                           </tr>
                         )}
                       </thead>
                       <tbody className="divide-y divide-border-subtle">
-                        {/* biome-ignore lint/suspicious/noExplicitAny: item is a union of shape types */}
+                        {/* biome-ignore lint/suspicious/noExplicitAny: item is a union of drill-down shape types */}
                         {drillDownFilteredItems.map((item: any, idx) => (
                           // biome-ignore lint/suspicious/noArrayIndexKey: drilldown list items don't reorder dynamically
                           <tr key={idx} className="hover:bg-surface-2/40">
-                            {activeDrillDown === "active_loans" ||
-                            activeDrillDown === "holds_queued" ? (
+                            {activeDrillDown === "active_loans" ? (
                               <>
                                 <td className="p-3 text-text-primary font-medium">{item.title}</td>
-                                <td className="p-3 font-mono">{item.isbn}</td>
-                                <td className="p-3 font-mono">{item.checkout_count}</td>
-                                <td className="p-3 font-mono">{item.hold_count}</td>
+                                <td className="p-3">{item.display_name}</td>
+                                <td className="p-3 font-mono">
+                                  {new Date(item.checked_out_at).toLocaleDateString()}
+                                </td>
+                                <td className="p-3 font-mono">
+                                  {new Date(item.due_at).toLocaleDateString()}
+                                </td>
                               </>
                             ) : activeDrillDown === "overdue_loans" ? (
                               <>
-                                <td className="p-3 text-text-primary font-medium">
-                                  {item.display_name}
+                                <td className="p-3 text-text-primary font-medium">{item.title}</td>
+                                <td className="p-3">{item.display_name}</td>
+                                <td className="p-3 font-mono text-danger">
+                                  {new Date(item.due_at).toLocaleDateString()}
                                 </td>
-                                <td className="p-3 font-mono">{item.email}</td>
-                                <td className="p-3 font-mono">{item.loan_count}</td>
                                 <td className="p-3 font-mono text-danger font-semibold">
-                                  {item.overdue_count}
+                                  {item.days_overdue}d
                                 </td>
+                              </>
+                            ) : activeDrillDown === "holds_queued" ? (
+                              <>
+                                <td className="p-3 text-text-primary font-medium">{item.title}</td>
+                                <td className="p-3">{item.display_name}</td>
+                                <td className="p-3 font-mono">
+                                  {new Date(item.queued_at).toLocaleDateString()}
+                                </td>
+                                <td className="p-3 capitalize">{item.status}</td>
                               </>
                             ) : (
                               <>
@@ -1568,8 +1627,9 @@ export function ReportsClientView({
                                 </td>
                                 <td className="p-3 font-mono">{item.email}</td>
                                 <td className="p-3 font-mono">
-                                  {new Date(item.created_at).toLocaleDateString()}
+                                  {new Date(item.created_at).toLocaleTimeString()}
                                 </td>
+                                <td className="p-3 capitalize">{item.status}</td>
                               </>
                             )}
                           </tr>
@@ -1670,7 +1730,7 @@ export function ReportsClientView({
                 </div>
 
                 <div className="border border-border-subtle rounded-lg p-4 bg-surface-2">
-                  <SvgMultiLineChart data={initialData.overview.circulationHistory} />
+                  <SvgMultiLineChart data={initialData.circulation.circulationHistory} />
                 </div>
               </div>
             </div>
@@ -2024,167 +2084,184 @@ export function ReportsClientView({
               </div>
             )}
 
-            {/* KPI Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl border border-border-subtle bg-surface flex items-center gap-4">
-                <DollarSign className="h-8 w-8 text-accent" />
-                <div>
-                  <span className="text-caption text-text-tertiary uppercase font-semibold">
-                    Monthly Spend
-                  </span>
-                  <div className="text-[28px] font-bold text-text-primary mt-1 font-mono">
-                    ${aiSpend.toFixed(4)}{" "}
-                    <span className="text-meta font-normal text-text-tertiary">
-                      / ${aiCap.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
+            {/* No-usage consolidated state */}
+            {aiSpend === 0 &&
+            initialData.aiUsage.p95LatencyMs === null &&
+            initialData.aiUsage.costByFeature.length === 0 &&
+            initialData.aiUsage.costByModel.length === 0 &&
+            initialData.aiUsage.costByRole.length === 0 ? (
+              <div className="p-8 rounded-xl border border-border-subtle bg-surface flex flex-col items-center justify-center gap-3 text-center">
+                <Sparkles className="h-10 w-10 text-text-tertiary" />
+                <p className="text-h3 text-text-primary font-semibold">No AI usage this period</p>
+                <p className="text-meta text-text-secondary max-w-xs">
+                  AI features have not been used this month. Usage metrics will appear here once
+                  members start using the Reader&apos;s Advisor or other AI-powered tools.
+                </p>
               </div>
-
-              <div className="p-4 rounded-xl border border-border-subtle bg-surface flex items-center gap-4">
-                <Clock className="h-8 w-8 text-success" />
-                <div>
-                  <span className="text-caption text-text-tertiary uppercase font-semibold">
-                    p95 Latency
-                  </span>
-                  <div className="text-[28px] font-bold text-text-primary mt-1 font-mono">
-                    {initialData.aiUsage.p95LatencyMs === null ? (
-                      <span className="text-meta font-normal text-text-tertiary">
-                        No AI usage this period
+            ) : (
+              <>
+                {/* KPI Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl border border-border-subtle bg-surface flex items-center gap-4">
+                    <DollarSign className="h-8 w-8 text-accent" />
+                    <div>
+                      <span className="text-caption text-text-tertiary uppercase font-semibold">
+                        Monthly Spend
                       </span>
-                    ) : (
-                      `${initialData.aiUsage.p95LatencyMs}ms`
-                    )}
+                      <div className="text-[28px] font-bold text-text-primary mt-1 font-mono">
+                        ${aiSpend.toFixed(4)}{" "}
+                        <span className="text-meta font-normal text-text-tertiary">
+                          / ${aiCap.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-border-subtle bg-surface flex items-center gap-4">
+                    <Clock className="h-8 w-8 text-success" />
+                    <div>
+                      <span className="text-caption text-text-tertiary uppercase font-semibold">
+                        p95 Latency
+                      </span>
+                      <div className="text-[28px] font-bold text-text-primary mt-1 font-mono">
+                        {initialData.aiUsage.p95LatencyMs === null
+                          ? "—"
+                          : `${initialData.aiUsage.p95LatencyMs}ms`}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Breakdown Lists */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Cost by Feature */}
-              <div className="p-5 rounded-xl border border-border-subtle bg-surface space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-h3 text-text-primary font-semibold">Cost by Feature</h3>
-                  <Button variant="secondary" size="sm" asChild>
-                    <a href="/api/reports/export?viewName=ai_cost_by_feature&format=csv" download>
-                      <Download className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
-                </div>
-                <div className="space-y-4">
-                  {initialData.aiUsage.costByFeature.length === 0 ? (
-                    <p className="text-meta text-text-secondary italic">No usage recorded.</p>
-                  ) : (
-                    initialData.aiUsage.costByFeature.map((item) => {
-                      const cost = Number.parseFloat(item.ai_cost_usd);
-                      const percentage = aiSpend > 0 ? (cost / aiSpend) * 100 : 0;
-                      return (
-                        <div key={item.feature} className="space-y-1">
-                          <div className="flex justify-between text-meta">
-                            <span className="font-medium text-text-primary capitalize">
-                              {item.feature.replace(/_/g, " ")}
-                            </span>
-                            <span className="text-text-secondary font-mono">
-                              ${cost.toFixed(4)} ({percentage.toFixed(1)}%)
-                            </span>
-                          </div>
-                          <div className="h-2 w-full bg-surface-2 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-accent rounded-full"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+                {/* Breakdown Lists */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Cost by Feature */}
+                  <div className="p-5 rounded-xl border border-border-subtle bg-surface space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-h3 text-text-primary font-semibold">Cost by Feature</h3>
+                      <Button variant="secondary" size="sm" asChild>
+                        <a
+                          href="/api/reports/export?viewName=ai_cost_by_feature&format=csv"
+                          download
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </a>
+                      </Button>
+                    </div>
+                    <div className="space-y-4">
+                      {initialData.aiUsage.costByFeature.length === 0 ? (
+                        <p className="text-meta text-text-secondary italic">No usage recorded.</p>
+                      ) : (
+                        initialData.aiUsage.costByFeature.map((item) => {
+                          const cost = Number.parseFloat(item.ai_cost_usd);
+                          const percentage = aiSpend > 0 ? (cost / aiSpend) * 100 : 0;
+                          return (
+                            <div key={item.feature} className="space-y-1">
+                              <div className="flex justify-between text-meta">
+                                <span className="font-medium text-text-primary capitalize">
+                                  {item.feature.replace(/_/g, " ")}
+                                </span>
+                                <span className="text-text-secondary font-mono">
+                                  ${cost.toFixed(4)} ({percentage.toFixed(1)}%)
+                                </span>
+                              </div>
+                              <div className="h-2 w-full bg-surface-2 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-accent rounded-full"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
 
-              {/* Cost by Model */}
-              <div className="p-5 rounded-xl border border-border-subtle bg-surface space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-h3 text-text-primary font-semibold">Cost by Model</h3>
-                  <Button variant="secondary" size="sm" asChild>
-                    <a href="/api/reports/export?viewName=ai_cost_by_model&format=csv" download>
-                      <Download className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
-                </div>
-                <div className="space-y-4">
-                  {initialData.aiUsage.costByModel.length === 0 ? (
-                    <p className="text-meta text-text-secondary italic">No usage recorded.</p>
-                  ) : (
-                    initialData.aiUsage.costByModel.map((item) => {
-                      const cost = Number.parseFloat(item.ai_cost_usd);
-                      const percentage = aiSpend > 0 ? (cost / aiSpend) * 100 : 0;
-                      return (
-                        <div key={item.model} className="space-y-1">
-                          <div className="flex justify-between text-meta">
-                            <span className="font-medium text-text-primary capitalize">
-                              {item.model.split("/").pop() || item.model}
-                            </span>
-                            <span className="text-text-secondary font-mono">
-                              ${cost.toFixed(4)} ({percentage.toFixed(1)}%)
-                            </span>
-                          </div>
-                          <div className="h-2 w-full bg-surface-2 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-success rounded-full"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+                  {/* Cost by Model */}
+                  <div className="p-5 rounded-xl border border-border-subtle bg-surface space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-h3 text-text-primary font-semibold">Cost by Model</h3>
+                      <Button variant="secondary" size="sm" asChild>
+                        <a href="/api/reports/export?viewName=ai_cost_by_model&format=csv" download>
+                          <Download className="h-3.5 w-3.5" />
+                        </a>
+                      </Button>
+                    </div>
+                    <div className="space-y-4">
+                      {initialData.aiUsage.costByModel.length === 0 ? (
+                        <p className="text-meta text-text-secondary italic">No usage recorded.</p>
+                      ) : (
+                        initialData.aiUsage.costByModel.map((item) => {
+                          const cost = Number.parseFloat(item.ai_cost_usd);
+                          const percentage = aiSpend > 0 ? (cost / aiSpend) * 100 : 0;
+                          return (
+                            <div key={item.model} className="space-y-1">
+                              <div className="flex justify-between text-meta">
+                                <span className="font-medium text-text-primary capitalize">
+                                  {item.model.split("/").pop() || item.model}
+                                </span>
+                                <span className="text-text-secondary font-mono">
+                                  ${cost.toFixed(4)} ({percentage.toFixed(1)}%)
+                                </span>
+                              </div>
+                              <div className="h-2 w-full bg-surface-2 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-success rounded-full"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
 
-              {/* Cost by Member Role */}
-              <div className="p-5 rounded-xl border border-border-subtle bg-surface space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-h3 text-text-primary font-semibold">Cost by User Role</h3>
-                  <Button variant="secondary" size="sm" asChild>
-                    <a
-                      href="/api/reports/export?viewName=ai_cost_by_member_role&format=csv"
-                      download
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
+                  {/* Cost by Member Role */}
+                  <div className="p-5 rounded-xl border border-border-subtle bg-surface space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-h3 text-text-primary font-semibold">Cost by User Role</h3>
+                      <Button variant="secondary" size="sm" asChild>
+                        <a
+                          href="/api/reports/export?viewName=ai_cost_by_member_role&format=csv"
+                          download
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </a>
+                      </Button>
+                    </div>
+                    <div className="space-y-4">
+                      {initialData.aiUsage.costByRole.length === 0 ? (
+                        <p className="text-meta text-text-secondary italic">No usage recorded.</p>
+                      ) : (
+                        initialData.aiUsage.costByRole.map((item) => {
+                          const cost = Number.parseFloat(item.ai_cost_usd);
+                          const percentage = aiSpend > 0 ? (cost / aiSpend) * 100 : 0;
+                          return (
+                            <div key={item.member_role} className="space-y-1">
+                              <div className="flex justify-between text-meta">
+                                <span className="font-medium text-text-primary capitalize">
+                                  {item.member_role}
+                                </span>
+                                <span className="text-text-secondary font-mono">
+                                  ${cost.toFixed(4)} ({percentage.toFixed(1)}%)
+                                </span>
+                              </div>
+                              <div className="h-2 w-full bg-surface-2 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-warning rounded-full"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  {initialData.aiUsage.costByRole.length === 0 ? (
-                    <p className="text-meta text-text-secondary italic">No usage recorded.</p>
-                  ) : (
-                    initialData.aiUsage.costByRole.map((item) => {
-                      const cost = Number.parseFloat(item.ai_cost_usd);
-                      const percentage = aiSpend > 0 ? (cost / aiSpend) * 100 : 0;
-                      return (
-                        <div key={item.member_role} className="space-y-1">
-                          <div className="flex justify-between text-meta">
-                            <span className="font-medium text-text-primary capitalize">
-                              {item.member_role}
-                            </span>
-                            <span className="text-text-secondary font-mono">
-                              ${cost.toFixed(4)} ({percentage.toFixed(1)}%)
-                            </span>
-                          </div>
-                          <div className="h-2 w-full bg-surface-2 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-warning rounded-full"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
+              </>
+            )}
 
             {/* Chat Refusals (24h) */}
             <div className="p-5 rounded-xl border border-border-subtle bg-surface space-y-4">
@@ -2235,7 +2312,7 @@ export function ReportsClientView({
                               {samples.map((s, idx) => (
                                 // biome-ignore lint/suspicious/noArrayIndexKey: index is appropriate for inline string lists
                                 <li key={idx} className="italic text-text-secondary/90">
-                                  "{s.length > 80 ? `${s.substring(0, 80)}...` : s}"
+                                  "{s}"
                                 </li>
                               ))}
                             </ul>

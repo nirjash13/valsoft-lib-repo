@@ -18,6 +18,20 @@ import { EmailVolumeCapError } from "@/lib/notifications/errors";
 import { and, count, eq, gte, inArray } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
+// REAL_SEND_STATUSES — the canonical "this represents an actual Resend dispatch"
+// Used by assertEmailVolume and by the notifications page volume meter.
+// ---------------------------------------------------------------------------
+
+/**
+ * Delivery statuses that represent a real email dispatch to Resend.
+ * `skipped_*` and `failed` rows do NOT count — they represent zero-dispatch rows.
+ * Exported so callers can reuse this definition without duplicating it.
+ */
+export const REAL_SEND_STATUSES = ["queued", "sent", "delivered", "bounced", "complained"] as const;
+
+export type RealSendStatus = (typeof REAL_SEND_STATUSES)[number];
+
+// ---------------------------------------------------------------------------
 // assertEmailVolume
 // ---------------------------------------------------------------------------
 
@@ -44,7 +58,7 @@ export async function assertEmailVolume(tx: TxClient, ctx: TenantCtx): Promise<v
 
   // Count actual send attempts this calendar month — exclude skipped/failed rows
   // that represent zero real Resend dispatches (M4 fix: NFR-07-03 email volume cap).
-  const ACTUAL_SEND_STATUSES = ["queued", "sent", "delivered", "bounced", "complained"] as const;
+  const ACTUAL_SEND_STATUSES = REAL_SEND_STATUSES;
 
   const [countRow] = await tx
     .select({ sent: count() })

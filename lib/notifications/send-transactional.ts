@@ -165,6 +165,7 @@ export async function sendWelcomeEmail(
         subject: string;
         libraryName: string;
         catalogUrl: string;
+        cardNumber: string | null;
       };
 
   const loaded = await withSystemTenantTx<LoadResult>(tenantId, async (tx, ctx) => {
@@ -174,6 +175,7 @@ export async function sendWelcomeEmail(
         email: members.email,
         displayName: members.displayName,
         emailStatus: members.emailStatus,
+        cardNumber: members.cardNumber,
       })
       .from(members)
       .where(eq(members.id, params.memberId));
@@ -212,16 +214,22 @@ export async function sendWelcomeEmail(
       subject,
       libraryName,
       catalogUrl,
+      cardNumber: member.cardNumber,
     };
   });
 
   if (loaded.skip) return;
 
   // Step 2: render + send — NO transaction open.
+  // Pass cardNumber when available (REQ-07-03 US-03).
+  // libraryAddress: no address column exists on tenants yet (follow-up task:
+  // add tenants.library_address). We pass the library name as a fallback so
+  // the template renders something useful while the column is pending.
   const html = await renderWelcome({
     memberName: loaded.displayName,
     libraryName: loaded.libraryName,
     catalogUrl: loaded.catalogUrl,
+    ...(loaded.cardNumber !== null ? { cardNumber: loaded.cardNumber } : {}),
   });
 
   const sentAt = new Date();

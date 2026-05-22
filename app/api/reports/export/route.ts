@@ -135,10 +135,12 @@ export async function GET(req: Request): Promise<Response> {
           }
 
           // Stream each row
+          const currentHeaders = headers;
+          if (!currentHeaders) break; // guard: headers always set before this point when rows exist
           for (const row of rows) {
             const line = isNdjson
               ? `${JSON.stringify(row)}\n`
-              : `${formatCSVRow(row, headers!)}\n`;
+              : `${formatCSVRow(row, currentHeaders)}\n`;
             hash.update(line);
             await writer.write(encoder.encode(line));
           }
@@ -158,9 +160,7 @@ export async function GET(req: Request): Promise<Response> {
           await writer.write(encoder.encode(`${footer}\n`));
         } else {
           // CSV: trailing comment lines matching the preamble convention
-          await writer.write(
-            encoder.encode(`# hash: ${hashHex}\n# signature: ${sig}\n`),
-          );
+          await writer.write(encoder.encode(`# hash: ${hashHex}\n# signature: ${sig}\n`));
         }
       });
     } catch (err) {

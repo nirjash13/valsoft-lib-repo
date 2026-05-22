@@ -31,7 +31,6 @@ const BASE_NAV_ITEMS: NavItem[] = [
   { label: "Loans", href: "/loans", icon: BookMarked },
   { label: "Holds", href: "/holds", icon: RotateCcw },
   { label: "Reports", href: "/reports", icon: BarChart2, disabled: true },
-  { label: "Settings", href: "/settings", icon: Settings, disabled: true },
 ];
 
 const TRASH_ITEM: NavItem = { label: "Trash", href: "/books/trash", icon: Trash2 };
@@ -54,6 +53,8 @@ interface SidebarProps {
   /** Whether the user can compose batch emails (librarian + tenant_admin). */
   canComposeEmail: boolean;
   canViewReports: boolean;
+  /** Whether the user can access tenant settings (tenant_admin only). */
+  canManageSettings: boolean;
 }
 
 export function Sidebar({
@@ -62,6 +63,7 @@ export function Sidebar({
   advisorEnabled,
   canComposeEmail,
   canViewReports,
+  canManageSettings,
 }: SidebarProps) {
   const pathname = usePathname();
   const rawItems = canViewTrash ? [...BASE_NAV_ITEMS, TRASH_ITEM] : BASE_NAV_ITEMS;
@@ -150,6 +152,24 @@ export function Sidebar({
                   label: "Notifications",
                   href: "/notifications",
                   icon: Bell,
+                })}
+              </li>
+            </>
+          )}
+
+          {/* Settings — visible to tenant_admin only (tenant:settings) */}
+          {canManageSettings && (
+            <>
+              <li className="pt-3 pb-1 px-3">
+                <span className="text-caption text-text-tertiary font-medium uppercase tracking-wide">
+                  Administration
+                </span>
+              </li>
+              <li>
+                {renderItem({
+                  label: "Settings",
+                  href: "/settings",
+                  icon: Settings,
                 })}
               </li>
             </>

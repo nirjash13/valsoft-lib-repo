@@ -1,4 +1,9 @@
-import { formatCSV, formatCSVRow, formatJSON, verifyJSONExport } from "@/lib/domain/reporting/exporter";
+import {
+  formatCSV,
+  formatCSVRow,
+  formatJSON,
+  verifyJSONExport,
+} from "@/lib/domain/reporting/exporter";
 import {
   type ReportQuery,
   ReportQuerySchema,
@@ -163,15 +168,17 @@ describe("Reporting service SQL compilation & query isolation", () => {
     expect(mockTx.execute).toHaveBeenCalledTimes(2);
 
     // Check first call set session period local config setting
-    const firstCallSql = serializeSqlChunks((mockTx.execute as any).mock.calls[0][0]);
+    const firstCallSql = serializeSqlChunks(vi.mocked(mockTx.execute).mock.calls[0]?.[0]);
     expect(firstCallSql).toContain("set_config('app.current_period'");
 
     // Check second call runs query against correct view and uses parameterized binding
-    const secondCallArg = (mockTx.execute as any).mock.calls[1][0];
+    const secondCallArg = vi.mocked(mockTx.execute).mock.calls[1]?.[0];
     const secondCallSql = serializeSqlChunks(secondCallArg);
     expect(secondCallSql).toContain("FROM reporting.loans_by_subject");
     expect(secondCallSql).toContain("subject =");
-    expect(result.sql).toBe("SELECT * FROM reporting.loans_by_subject WHERE subject = ?");
+    expect(result.sql).toBe(
+      "SELECT * FROM reporting.loans_by_subject WHERE subject = 'Fantasy' -- period: last_30_days (applied via app.current_period); tenant scoped via RLS",
+    );
   });
 });
 
@@ -231,7 +238,9 @@ describe("Streaming CSV row formatter", () => {
       { title: "Clean Code", checkout_count: 15 },
       { title: "Design Patterns", checkout_count: 10 },
     ];
-    const headers = Object.keys(rows[0]!);
+    const firstRow = rows[0];
+    if (!firstRow) throw new Error("Test data missing first row");
+    const headers = Object.keys(firstRow);
 
     // formatCSVRow should produce the same per-row content that formatCSV embeds
     for (const row of rows) {
@@ -240,8 +249,11 @@ describe("Streaming CSV row formatter", () => {
       expect(rowLine).toContain(`"${row.checkout_count}"`);
     }
 
-    expect(formatCSVRow(rows[0]!, headers)).toBe('"Clean Code","15"');
-    expect(formatCSVRow(rows[1]!, headers)).toBe('"Design Patterns","10"');
+    const row0 = rows[0];
+    const row1 = rows[1];
+    if (!row0 || !row1) throw new Error("Test data missing rows");
+    expect(formatCSVRow(row0, headers)).toBe('"Clean Code","15"');
+    expect(formatCSVRow(row1, headers)).toBe('"Design Patterns","10"');
   });
 
   it("handles null, undefined, objects, and embedded quotes", () => {

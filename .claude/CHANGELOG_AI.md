@@ -4,6 +4,39 @@
 <!-- Format: ## YYYY-MM-DD — Short Title -->
 <!-- Each entry: what changed, files affected, decisions made. -->
 
+## 2026-05-22 — Spec 07 + 08: review gap-fix pass
+
+A `/review` gap-audit of the committed Notifications (07) and Reporting (08) features —
+two `critic-opus` audits, then four `bug-fixer` agents closed the gaps. (Spec 08 —
+Reporting: dashboards + NL `ReportQuery` + AI-usage tab + signed CSV/ndjson export — had
+landed in commit `ae3a93f` without its own changelog entry; this entry covers it.)
+
+**Spec 07 fixes.** CRITICAL — the batch-email body was passed as raw Markdown into
+`BatchReminder`'s `dangerouslySetInnerHTML`, so every AI-drafted/librarian email shipped
+literal `**bold**` to patrons; new `lib/notifications/markdown-to-html.ts` (allowlist
+sanitizer, no new dep) now converts it in `send-batch.ts`. HIGH — `email-client.ts`
+`sendEmail` retries a 5xx with exponential backoff (3 attempts, fails fast on 4xx) per
+REQ-07-08; new tenant-admin `app/(app)/settings` brand-voice page (warm/formal/academic,
+`tenant:settings`-gated) makes US-06 buildable; migration `0015_member_card_number` adds
+`members.card_number` (generated on approval, included in the welcome email per REQ-07-03).
+MEDIUM — email volume/cap meter on the notifications page (US-07); "audience changed since
+draft" re-confirm in the batch composer (§7).
+
+**Spec 08 fixes.** HIGH — restored the biome CI gate to green (committed code was failing
+it); "View as SQL" now discloses the period filter + RLS scoping instead of an
+oversimplified `SELECT *`; migration `0014_reporting_kpi_series` adds per-KPI daily-series
++ drill-down views so Overview sparklines and tile drill-downs use each tile's own metric
+(the Overdue tile had been rendering a *returns* trend). MEDIUM — removed the NL
+line-chart placeholder text shipped to users; consolidated "No AI usage this period"
+empty state.
+
+**Deferred (reported, not fixed):** `tenants.library_address` column for the welcome
+email — needs a migration touching `tenants.ts`, which has uncommitted Spec 09 edits;
+§7 tone-mismatch hint (no audience-age signal exists); Spec 08 NL short-question
+clarification round-trip (needs a reporting-prompt version bump → eval gate); Langfuse
+AI-draft span (Spec 11 owns AI tracing). Gates: typecheck 0, biome 0 in-scope, 86/86 unit,
+build green. Migrations `0014` + `0015` applied to the live Neon DB.
+
 ## 2026-05-22 — Spec 07: Notifications (transactional + lifecycle emails, AI-drafted batch)
 
 Closes the circulation loop with email: due-date reminders (T-2/T-0/T+1), hold-ready,

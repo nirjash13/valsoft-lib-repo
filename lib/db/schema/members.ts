@@ -108,6 +108,12 @@ export const members = pgTable(
     // Toggled via the unsubscribe link in lifecycle emails.
     lifecycleEmailsEnabled: boolean("lifecycle_emails_enabled").notNull().default(true),
 
+    // Library card number — generated at member-approval time (Spec 07 REQ-07-03).
+    // Format: LIB-<8 uppercase hex chars> derived from member UUID. Nullable so
+    // existing rows before 0015_member_card_number migration are valid; backfill
+    // is applied by the migration itself.
+    cardNumber: text("card_number"),
+
     createdAt: createdAt(),
     updatedAt: updatedAt(),
 
