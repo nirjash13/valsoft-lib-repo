@@ -20,6 +20,7 @@ import { assertAiBudget } from "@/lib/ai/budget";
 import { generateObjectViaGateway } from "@/lib/ai/gateway";
 import type { TenantId } from "@/lib/db/schema/_shared";
 import type { TxClient } from "@/lib/db/with-tenant-tx";
+import { recordUsage } from "@/lib/domain/chat/record-usage";
 import { normalizeIsbn } from "./isbn";
 import { getCached, putCached } from "./isbn-cache";
 import type { BookRecord } from "./schemas";
@@ -117,7 +118,7 @@ export async function previewIsbn(
 
     try {
       const systemPrompt = getPromptBody();
-      const normalized = await generateObjectViaGateway({
+      const result = await generateObjectViaGateway({
         model: "anthropic/claude-haiku-4-5",
         schema: BookRecordSchema.partial(),
         system: systemPrompt,
@@ -125,6 +126,20 @@ export async function previewIsbn(
         tenantId,
         feature: "isbn-enrich",
       });
+      const normalized = result.object;
+
+      // Record usage inside transaction
+      await recordUsage(
+        tx,
+        { tenantId, userId: "system" },
+        {
+          feature: "isbn-enrich",
+          model: "anthropic/claude-haiku-4-5",
+          promptTokens: result.usage.promptTokens,
+          completionTokens: result.usage.completionTokens,
+        },
+      );
+
       // exactOptionalPropertyTypes: filter out undefined values from the LLM result
       // before assigning, so we don't set explicitly-undefined optional props.
       finalRecord = Object.fromEntries(

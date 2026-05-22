@@ -1,4 +1,13 @@
-import { integer, jsonb, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 import { createdAt, tenantIdColumn, updatedAt } from "./_shared";
 import { tenants } from "./tenants";
 
@@ -32,6 +41,10 @@ export const books = pgTable("books", {
   coverUrl: text("cover_url"),
   description: varchar("description", { length: 4000 }),
   customFields: jsonb("custom_fields").$type<Record<string, string>>(),
+
+  // --- Import flags ---
+  /** REQ-10-03: true when the book was imported without ISBN (no enrichment applied). */
+  enrichmentSkipped: boolean("enrichment_skipped").notNull().default(false),
 
   // --- Timestamps ---
   createdAt: createdAt(),

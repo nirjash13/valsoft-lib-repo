@@ -32,7 +32,7 @@ export const askReportQuestion = actionClient
       const promptMeta = loadPromptByName("reporting.v1.md");
 
       // 3. Invoke LLM to translate question to ReportQuery object
-      const reportQuery = await generateObjectViaGateway({
+      const { object: reportQuery } = await generateObjectViaGateway({
         model: "anthropic/claude-sonnet-4-6",
         schema: ReportQuerySchema,
         system: promptMeta.body,

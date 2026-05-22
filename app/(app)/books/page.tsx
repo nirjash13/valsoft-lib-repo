@@ -49,12 +49,17 @@ export default async function BooksPage({ searchParams }: BooksPageProps) {
         </div>
 
         {canCreate && (
-          <Button asChild>
-            <Link href="/books/new">
-              <Plus className="h-4 w-4" aria-hidden />
-              Add Book
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" asChild>
+              <Link href="/books/import">Import CSV</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/books/new">
+                <Plus className="h-4 w-4" aria-hidden />
+                Add Book
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
 

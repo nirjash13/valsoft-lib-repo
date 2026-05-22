@@ -72,11 +72,16 @@ export async function assertAiBudget(tenantId: TenantId, estimatedCostUsd: numbe
       throw new AiBudgetNotConfiguredError(tenantId);
     }
 
-    // Stub: compare estimated single-call cost against cap (no accumulation yet).
-    // TODO (Spec 11): sum usage from ai_usage table for the current billing month
-    // and add estimatedCostUsd before this comparison.
-    if (estimatedCostUsd > capUsd) {
-      throw new AiBudgetExceededError(tenantId, capUsd, estimatedCostUsd);
+    // Sum usage from ai_usage table for the current billing month (UTC month)
+    const usageResult = await client.query<{ mtd_cost: string | null }>(
+      "SELECT SUM(cost_usd) as mtd_cost FROM ai_usage WHERE tenant_id = $1 AND created_at >= date_trunc('month', CURRENT_DATE)",
+      [tenantId],
+    );
+    const mtdCost =
+      usageResult.rows[0]?.mtd_cost != null ? Number.parseFloat(usageResult.rows[0].mtd_cost) : 0;
+
+    if (mtdCost + estimatedCostUsd > capUsd) {
+      throw new AiBudgetExceededError(tenantId, capUsd, mtdCost + estimatedCostUsd);
     }
   } finally {
     client.release();

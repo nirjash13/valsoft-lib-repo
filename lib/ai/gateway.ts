@@ -130,7 +130,9 @@ export interface GenerateObjectParams<T> {
  * @throws AiGatewayNotConfiguredError if the key is missing
  * @throws ZodError if the model's output doesn't match the schema (generateObject throws)
  */
-export async function generateObjectViaGateway<T>(params: GenerateObjectParams<T>): Promise<T> {
+export async function generateObjectViaGateway<T>(
+  params: GenerateObjectParams<T>,
+): Promise<{ object: T; usage: { promptTokens: number; completionTokens: number } }> {
   const apiKey = process.env.AI_GATEWAY_API_KEY;
   if (!apiKey) {
     throw new AiGatewayNotConfiguredError();
@@ -157,7 +159,14 @@ export async function generateObjectViaGateway<T>(params: GenerateObjectParams<T
     },
   });
 
-  return result.object;
+  // AI SDK v6 uses inputTokens / outputTokens on LanguageModelUsage.
+  return {
+    object: result.object,
+    usage: {
+      promptTokens: result.usage?.inputTokens ?? 0,
+      completionTokens: result.usage?.outputTokens ?? 0,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

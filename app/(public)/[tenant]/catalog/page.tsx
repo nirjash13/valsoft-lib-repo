@@ -5,6 +5,7 @@ import {
   requirePublicCatalog,
 } from "@/lib/domain/catalog/resolve-tenant-by-slug";
 import { listPublicBooks } from "@/lib/domain/catalog/service";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CatalogSearch } from "./catalog-search";
@@ -12,10 +13,29 @@ import { PublicBookCard } from "./public-book-card";
 
 interface CatalogPageProps {
   params: Promise<{ tenant: string }>;
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; subjects?: string; language?: string }>;
 }
 
 export const revalidate = 60; // Cache this browse page at the edge for 60 seconds (ISR)
+
+/**
+ * Catalog list-page metadata (US-04, LOW).
+ */
+export async function generateMetadata({ params }: CatalogPageProps): Promise<Metadata> {
+  const { tenant: slug } = await params;
+
+  let config: TenantCatalogConfig;
+  try {
+    config = await requirePublicCatalog(slug);
+  } catch {
+    return {};
+  }
+
+  return {
+    title: `Catalog — ${config.tenantName}`,
+    description: `Browse the full book collection at ${config.tenantName}.`,
+  };
+}
 
 /**
  * Public catalog browse page.
@@ -30,6 +50,8 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
   const page = Math.max(1, Number(sParams.page ?? 1));
   const limit = 24; // clean multiple for grids
   const offset = (page - 1) * limit;
+  const subjects = sParams.subjects;
+  const language = sParams.language;
 
   // 1. Resolve tenant & assert public catalog is enabled
   let config: TenantCatalogConfig;
@@ -41,7 +63,17 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
 
   // 2. Fetch books under RLS (using system transaction, lexical-only search)
   const { books, totalCount } = await withSystemTenantTx(config.tenantId, (tx) =>
-    listPublicBooks(tx, { q: query, limit, offset }, config.publicCatalogSubjectBlocklist),
+    listPublicBooks(
+      tx,
+      {
+        q: query,
+        limit,
+        offset,
+        subjects: subjects ? subjects.split(",").filter(Boolean) : undefined,
+        language,
+      },
+      config.publicCatalogSubjectBlocklist,
+    ),
   );
 
   const totalPages = Math.ceil(totalCount / limit);
@@ -60,8 +92,13 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
 
         {/* Search & Statistics */}
         <div className="flex flex-col gap-2 items-end w-full md:w-auto">
-          <CatalogSearch defaultValue={query} />
-          <p className="text-caption text-text-tertiary">
+          <CatalogSearch
+            defaultValue={query}
+            defaultSubjects={subjects}
+            defaultLanguage={language}
+          />
+          {/* aria-live: announces count updates to screen readers (NFR-09-03) */}
+          <p className="text-caption text-text-tertiary" aria-live="polite" aria-atomic="true">
             {totalCount} book{totalCount !== 1 ? "s" : ""}
             {query ? ` matching "${query}"` : ""}
           </p>
@@ -70,7 +107,7 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
 
       {/* Grid of Books */}
       {books.length === 0 ? (
-        <EmptyState slug={slug} query={query} />
+        <EmptyState slug={slug} query={query} signupUrl={`/signup?tenant=${slug}`} />
       ) : (
         <div className="flex flex-col gap-8">
           <ul
@@ -131,7 +168,11 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
   );
 }
 
-function EmptyState({ slug, query }: { slug: string; query: string }) {
+function EmptyState({
+  slug,
+  query,
+  signupUrl,
+}: { slug: string; query: string; signupUrl: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center bg-surface border border-border-subtle rounded-2xl p-8 max-w-lg mx-auto">
       <div
@@ -147,9 +188,14 @@ function EmptyState({ slug, query }: { slug: string; query: string }) {
           ? `We couldn't find any books matching "${query}". Try checking your spelling or using different keywords.`
           : "This library catalog doesn't have any public books listed yet."}
       </p>
-      {query && (
+      {query ? (
         <Button asChild>
           <Link href={`/${slug}/catalog`}>Clear search filter</Link>
+        </Button>
+      ) : (
+        /* US-03/§7: empty catalog CTA — lead prospective members to sign up */
+        <Button asChild>
+          <Link href={signupUrl}>Get a library card</Link>
         </Button>
       )}
     </div>

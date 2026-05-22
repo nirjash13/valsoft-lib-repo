@@ -8,6 +8,7 @@ import type { PublicBookDetail } from "@/lib/domain/catalog/schemas";
 import { getPublicBook } from "@/lib/domain/catalog/service";
 import { coverGradient } from "@/lib/utils/cover-color";
 import { ArrowLeft, BookOpen, Calendar, HelpCircle, Layers, Users } from "lucide-react";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -17,6 +18,49 @@ interface BookDetailPageProps {
 }
 
 export const revalidate = 60; // Cache this book detail page at the edge for 60 seconds (ISR)
+
+/**
+ * Per-book SEO metadata (REQ-09-04, NFR-09-04).
+ * Renders server-side so crawlers see title/description without hydration.
+ */
+export async function generateMetadata({ params }: BookDetailPageProps): Promise<Metadata> {
+  const { tenant: slug, bookId } = await params;
+
+  let config: TenantCatalogConfig;
+  try {
+    config = await requirePublicCatalog(slug);
+  } catch {
+    return {};
+  }
+
+  let book: PublicBookDetail;
+  try {
+    book = await withSystemTenantTx(config.tenantId, (tx) =>
+      getPublicBook(tx, bookId, config.publicCatalogSubjectBlocklist),
+    );
+  } catch {
+    return {};
+  }
+
+  const title = `${book.title} — ${config.tenantName}`;
+  const description = book.description
+    ? book.description.slice(0, 160).trimEnd()
+    : `${book.title} by ${book.authors.join(", ")} — available in the ${config.tenantName} catalog.`;
+
+  const baseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000";
+  const canonical = `${baseUrl}/${slug}/catalog/${bookId}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title,
+      description,
+      // Per-book OG image is served by app/(public)/[tenant]/catalog/[bookId]/opengraph-image.tsx
+    },
+  };
+}
 
 /**
  * Public catalog book detail page.

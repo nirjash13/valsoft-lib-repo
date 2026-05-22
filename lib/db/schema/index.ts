@@ -15,3 +15,5 @@ export * from "./chat-refusals";
 export * from "./ai-usage";
 export * from "./email-batches";
 export * from "./outgoing-emails";
+export * from "./import-jobs";
+export * from "./import-rows";

@@ -103,7 +103,7 @@ Write a subject (max 120 chars) and a body in Markdown (max 4000 chars).`;
 
 Audience summary (aggregate only — no names or emails): ${params.audienceSummary}`;
 
-  return generateObjectViaGateway({
+  const result = await generateObjectViaGateway({
     model: MODELS.readersAdvisor,
     schema: PatronEmailDraftSchema,
     system,
@@ -111,4 +111,5 @@ Audience summary (aggregate only — no names or emails): ${params.audienceSumma
     tenantId: params.tenantId,
     feature: "patron_email_draft",
   });
+  return result.object;
 }

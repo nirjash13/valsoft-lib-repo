@@ -63,6 +63,11 @@ export async function GET(
     if (err instanceof PublicBookNotFoundError) {
       return problem(404, "Not Found", err.message, "BOOK_NOT_FOUND");
     }
+    // Map RLS-raise (insufficient_privilege on tenant mismatch) to 404 rather than 500
+    // so callers don't see internal DB errors leaking out (REQ-09-07, REQ-09-06).
+    if (err instanceof Error && err.message.includes("insufficient_privilege")) {
+      return problem(404, "Not Found", "Book not found in this catalog", "BOOK_NOT_FOUND");
+    }
     return problem(500, "Internal Server Error", undefined, "INTERNAL_ERROR");
   }
 }

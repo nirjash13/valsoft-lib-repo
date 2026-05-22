@@ -1,13 +1,14 @@
 /**
  * Settings page — tenant configuration (tenant_admin only).
  *
- * US-06: admin can view and change the brand voice (warm / formal / academic)
- * that AI draft mode uses when composing patron batch emails.
+ * US-05: admin can toggle the public catalog on/off.
+ * US-06: admin can set the brand voice (warm / formal / academic).
  *
  * Gated on tenant:settings CASL permission (tenant_admin only).
  */
 
 import { BrandVoiceForm } from "@/components/settings/brand-voice-form";
+import { PublicCatalogToggle } from "@/components/settings/public-catalog-toggle";
 import { buildAbility } from "@/lib/auth/ability";
 import { requireSession, sessionToTenantCtx } from "@/lib/auth/session";
 import { tenants } from "@/lib/db/schema/tenants";
@@ -38,12 +39,20 @@ export default async function SettingsPage() {
 
   const tenantCtx = await sessionToTenantCtx(session);
 
-  const currentBrandVoice = await withTenantTx(tenantCtx, async (tx, txCtx) => {
+  const tenantSettings = await withTenantTx(tenantCtx, async (tx, txCtx) => {
     const [tenantRow] = await tx
-      .select({ brandVoice: tenants.brandVoice })
+      .select({
+        brandVoice: tenants.brandVoice,
+        publicCatalogEnabled: tenants.publicCatalogEnabled,
+        slug: tenants.slug,
+      })
       .from(tenants)
       .where(eq(tenants.id, txCtx.tenantId));
-    return (tenantRow?.brandVoice as BrandVoice | null) ?? DEFAULT_BRAND_VOICE;
+    return {
+      brandVoice: (tenantRow?.brandVoice as BrandVoice | null) ?? DEFAULT_BRAND_VOICE,
+      publicCatalogEnabled: tenantRow?.publicCatalogEnabled ?? false,
+      slug: tenantRow?.slug ?? "",
+    };
   });
 
   return (
@@ -55,7 +64,24 @@ export default async function SettingsPage() {
         </p>
       </header>
 
-      {/* Brand voice */}
+      {/* Public Catalog — US-05, REQ-09-05 */}
+      <section aria-labelledby="public-catalog-heading">
+        <h2 id="public-catalog-heading" className="text-h3 font-semibold text-text-primary mb-1">
+          Public catalog
+        </h2>
+        <p className="text-sm text-text-tertiary mb-4">
+          Allow anyone to browse your book collection without logging in (US-05). Disabling removes
+          your library from the public sitemap and returns 404 for catalog URLs.
+        </p>
+        <div className="rounded-lg border border-border-subtle bg-surface p-6">
+          <PublicCatalogToggle
+            currentEnabled={tenantSettings.publicCatalogEnabled}
+            tenantSlug={tenantSettings.slug}
+          />
+        </div>
+      </section>
+
+      {/* Brand voice — US-06 */}
       <section aria-labelledby="brand-voice-heading">
         <h2 id="brand-voice-heading" className="text-h3 font-semibold text-text-primary mb-1">
           AI email tone
@@ -64,7 +90,7 @@ export default async function SettingsPage() {
           Controls the tone the AI uses when drafting batch patron emails (US-06).
         </p>
         <div className="rounded-lg border border-border-subtle bg-surface p-6">
-          <BrandVoiceForm currentBrandVoice={currentBrandVoice} />
+          <BrandVoiceForm currentBrandVoice={tenantSettings.brandVoice} />
         </div>
       </section>
     </div>
