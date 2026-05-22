@@ -14,6 +14,7 @@
 
 import { assertAiBudget } from "@/lib/ai/budget";
 import { generateEmbedding } from "@/lib/ai/gateway";
+import { recordAiUsage } from "@/lib/ai/usage";
 import type { BookId, TenantId } from "@/lib/db/schema/_shared";
 import {
   EMBEDDING_COST_USD,
@@ -99,6 +100,20 @@ export async function embedBook(tx: TxClient, params: EmbedBookParams): Promise<
       functionId: "search-embed",
     });
     embedding = result.embedding;
+
+    // Record ai_usage row for cost tracking (REQ-11-07).
+    // Use the real token count from the AI SDK when available (result.promptTokens);
+    // fall back to 0 only if the SDK did not report usage. completionTokens is
+    // always 0 for embeddings (no output tokens).
+    // Failure is swallowed inside recordAiUsage — does not affect embedding.
+    await recordAiUsage(tx, {
+      tenantId: params.tenantId,
+      feature: "search_embed",
+      model: result.model,
+      promptTokens: result.promptTokens ?? 0,
+      completionTokens: 0,
+      costUsd: EMBEDDING_COST_USD,
+    });
   } catch (err) {
     throw new EmbeddingFailedError(err);
   }

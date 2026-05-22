@@ -1,0 +1,128 @@
+# Satisfies: REQ-12-03, Spec 12 §8 edge case (Neon branch quota)
+# Deletes the Neon preview branch when a PR is closed (within 24h).
+# Also runs on a daily schedule to purge branches older than 14 days (quota edge case).
+
+name: Neon Branch Cleanup
+
+on:
+  pull_request:
+    branches: ["main"]
+    types: [closed]
+  schedule:
+    # Run daily at 04:00 UTC to catch stale branches from any source.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      max_age_days:
+        description: "Delete Neon branches older than this many days (default: 14)"
+        required: false
+        default: "14"
+
+permissions:
+  contents: read
+  pull-requests: read   # to read PR branch name on close event
+
+env:
+  MAX_AGE_DAYS: ${{ github.event.inputs.max_age_days || '14' }}
+
+jobs:
+  # ── Triggered on PR close: delete the specific PR's Neon branch ──
+  delete-pr-branch:
+    name: Delete Neon Branch for Closed PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    steps:
+      - name: Delete Neon branch for PR #${{ github.event.pull_request.number }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          BRANCH_PREFIX="pr-${PR_NUMBER}-"
+
+          echo "Looking for Neon branches matching prefix: ${BRANCH_PREFIX}"
+
+          # List all branches in the project.
+          BRANCHES=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}" \
+            "https://console.neon.tech/api/v2/projects/${{ secrets.NEON_PROJECT_ID }}/branches" \
+            | jq -r '.branches[] | select(.name | startswith("'"${BRANCH_PREFIX}"'")) | .id + " " + .name')
+
+          if [ -z "$BRANCHES" ]; then
+            echo "No Neon branches found for PR #${PR_NUMBER} — nothing to delete."
+            exit 0
+          fi
+
+          echo "$BRANCHES" | while IFS= read -r line; do
+            BRANCH_ID=$(echo "$line" | cut -d' ' -f1)
+            BRANCH_NAME=$(echo "$line" | cut -d' ' -f2)
+            echo "Deleting Neon branch: ${BRANCH_NAME} (${BRANCH_ID})"
+
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X DELETE \
+              -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}" \
+              "https://console.neon.tech/api/v2/projects/${{ secrets.NEON_PROJECT_ID }}/branches/${BRANCH_ID}")
+
+            if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "204" ]; then
+              echo "::notice::Deleted Neon branch ${BRANCH_NAME} (REQ-12-03)"
+            else
+              echo "::warning::Failed to delete Neon branch ${BRANCH_NAME} (HTTP ${HTTP_STATUS})"
+            fi
+          done
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+
+  # ── Daily schedule: purge any branch older than MAX_AGE_DAYS ──
+  purge-stale-branches:
+    name: Purge Stale Neon Branches (>${{ github.event.inputs.max_age_days || '14' }} days)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: List and delete branches older than ${{ env.MAX_AGE_DAYS }} days
+        run: |
+          MAX_AGE_DAYS="${{ env.MAX_AGE_DAYS }}"
+          CUTOFF_EPOCH=$(date -d "-${MAX_AGE_DAYS} days" +%s)
+
+          echo "Deleting Neon branches created before $(date -d "-${MAX_AGE_DAYS} days" -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          # List all branches; filter those created before the cutoff and matching the PR pattern.
+          BRANCHES=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}" \
+            "https://console.neon.tech/api/v2/projects/${{ secrets.NEON_PROJECT_ID }}/branches" \
+            | jq -r '.branches[] | select(.name | startswith("pr-")) | .id + " " + .name + " " + .created_at')
+
+          if [ -z "$BRANCHES" ]; then
+            echo "No preview branches found."
+            exit 0
+          fi
+
+          DELETED=0
+          SKIPPED=0
+
+          while IFS= read -r line; do
+            BRANCH_ID=$(echo "$line" | cut -d' ' -f1)
+            BRANCH_NAME=$(echo "$line" | cut -d' ' -f2)
+            CREATED_AT=$(echo "$line" | cut -d' ' -f3)
+
+            # Parse ISO 8601 date to epoch.
+            BRANCH_EPOCH=$(date -d "$CREATED_AT" +%s 2>/dev/null || echo 0)
+
+            if [ "$BRANCH_EPOCH" -lt "$CUTOFF_EPOCH" ]; then
+              echo "Deleting stale branch: ${BRANCH_NAME} (created: ${CREATED_AT})"
+
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X DELETE \
+                -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}" \
+                "https://console.neon.tech/api/v2/projects/${{ secrets.NEON_PROJECT_ID }}/branches/${BRANCH_ID}")
+
+              if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "204" ]; then
+                echo "  Deleted."
+                DELETED=$((DELETED + 1))
+              else
+                echo "  ::warning::Delete failed (HTTP ${HTTP_STATUS})"
+              fi
+            else
+              SKIPPED=$((SKIPPED + 1))
+            fi
+          done <<< "$BRANCHES"
+
+          echo "::notice::Cleanup complete — deleted ${DELETED} stale branches, skipped ${SKIPPED} recent branches."
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}

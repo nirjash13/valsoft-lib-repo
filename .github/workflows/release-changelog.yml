@@ -1,0 +1,215 @@
+# Satisfies: REQ-12-10
+# On push of tags matching v*.*.* (Conventional Commits):
+#   1. Generate release notes from Conventional Commits since the previous tag.
+#   2. Populate the GitHub Release body.
+#   3. Append a new section to .claude/CHANGELOG_AI.md for AI-authored changes.
+
+name: Release Changelog
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write   # to create GitHub Release + push CHANGELOG_AI.md update
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "11.1.3"
+
+jobs:
+  release:
+    name: Generate Release Notes + Update Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for tag comparison)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use a PAT so the push of CHANGELOG_AI.md can trigger CI if needed.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Step 1: Find previous tag ──
+      - name: Get previous tag
+        id: prev-tag
+        run: |
+          CURRENT_TAG="${{ github.ref_name }}"
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${CURRENT_TAG}$" | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            # First release — use the initial commit as the base.
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "prev_tag=${PREV_TAG}" >> $GITHUB_OUTPUT
+          echo "current_tag=${CURRENT_TAG}" >> $GITHUB_OUTPUT
+          echo "::notice::Generating changelog from ${PREV_TAG}..${CURRENT_TAG}"
+
+      # ── Step 2: Generate Conventional Commits grouped release notes ──
+      - name: Generate release notes from Conventional Commits
+        id: release-notes
+        run: |
+          CURRENT_TAG="${{ steps.prev-tag.outputs.current_tag }}"
+          PREV_TAG="${{ steps.prev-tag.outputs.prev_tag }}"
+          DATE=$(date -u +%Y-%m-%d)
+
+          # Gather commits between the two tags, formatted as "hash subject".
+          COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"%H %s" --no-merges)
+
+          # Group by Conventional Commit type using Node.js inline script.
+          NOTES=$(node - <<'SCRIPT'
+          const lines = process.env.GIT_COMMITS.split('\n').filter(Boolean);
+          const groups = {
+            feat: [], fix: [], perf: [], refactor: [],
+            docs: [], chore: [], ci: [], test: [], other: []
+          };
+          for (const line of lines) {
+            const [hash, ...rest] = line.split(' ');
+            const subject = rest.join(' ');
+            const m = subject.match(/^(\w+)(\(.*?\))?(!)?:\s*(.+)/);
+            const type = m ? m[1] : 'other';
+            const scope = m && m[2] ? m[2] : '';
+            const msg = m ? m[4] : subject;
+            const short = hash.substring(0, 7);
+            const entry = `- ${scope ? scope + ': ' : ''}${msg} (\`${short}\`)`;
+            (groups[type] || groups.other).push(entry);
+          }
+          const section = (title, items) => items.length ? `### ${title}\n${items.join('\n')}\n` : '';
+          const notes = [
+            section('Features', groups.feat),
+            section('Bug Fixes', groups.fix),
+            section('Performance', groups.perf),
+            section('Refactoring', groups.refactor),
+            section('Documentation', groups.docs),
+            section('CI', groups.ci),
+            section('Tests', groups.test),
+            section('Chores', groups.chore),
+            section('Other', groups.other),
+          ].filter(Boolean).join('\n');
+          process.stdout.write(notes);
+          SCRIPT
+          )
+          GIT_COMMITS="$COMMITS"
+
+          # Write to a file to avoid shell quoting issues with multi-line content.
+          cat > /tmp/release-notes.md << NOTES_EOF
+          ## What's Changed (${CURRENT_TAG})
+
+          ${NOTES}
+
+          **Full diff:** [\`${PREV_TAG}\`...\`${CURRENT_TAG}\`](https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG})
+          NOTES_EOF
+
+          echo "notes_path=/tmp/release-notes.md" >> $GITHUB_OUTPUT
+        env:
+          GIT_COMMITS: ${{ steps.prev-tag.outputs.prev_tag }}
+
+      # ── Step 3: Create or update GitHub Release ──
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const notes = fs.readFileSync('/tmp/release-notes.md', 'utf8');
+            const tag = '${{ steps.prev-tag.outputs.current_tag }}';
+
+            try {
+              // Check if release already exists (e.g. created via GitHub UI).
+              const existing = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              // Update the existing release body.
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existing.data.id,
+                body: notes,
+              });
+              core.notice(`Updated existing GitHub Release for ${tag}`);
+            } catch (e) {
+              if (e.status === 404) {
+                // Create a new release.
+                await github.rest.repos.createRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_name: tag,
+                  name: tag,
+                  body: notes,
+                  draft: false,
+                  prerelease: tag.includes('-'),
+                });
+                core.notice(`Created GitHub Release for ${tag}`);
+              } else {
+                throw e;
+              }
+            }
+
+      # ── Step 4: Append AI-authored section to .claude/CHANGELOG_AI.md ──
+      # This section records which changes in this release were AI-authored,
+      # for the hiring panel and for operational auditability (Spec 12 §9).
+      - name: Update CHANGELOG_AI.md
+        run: |
+          CURRENT_TAG="${{ steps.prev-tag.outputs.current_tag }}"
+          PREV_TAG="${{ steps.prev-tag.outputs.prev_tag }}"
+          DATE=$(date -u +%Y-%m-%d)
+
+          # Extract commits with AI provenance markers (Co-Authored-By: claude-* or writer-haiku).
+          AI_COMMITS=$(git log "${PREV_TAG}..HEAD" \
+            --pretty=format:"%H %s" \
+            --no-merges \
+            --grep="Co-Authored-By: Claude\|written-by: writer-haiku\|written-by: builder-sonnet\|written-by: critic-opus")
+
+          if [ -z "$AI_COMMITS" ]; then
+            AI_SECTION="_No AI-authored commits detected in this release._"
+          else
+            AI_SECTION=$(echo "$AI_COMMITS" | while IFS= read -r line; do
+              HASH=$(echo "$line" | cut -d' ' -f1 | cut -c1-7)
+              SUBJECT=$(echo "$line" | cut -d' ' -f2-)
+              echo "- \`${HASH}\` ${SUBJECT}"
+            done)
+          fi
+
+          ENTRY=$(cat << ENTRY_EOF
+
+          ## ${CURRENT_TAG} — ${DATE}
+
+          ### AI-Authored Changes
+
+          ${AI_SECTION}
+
+          _Generated by release-changelog.yml from Conventional Commits between ${PREV_TAG}..${CURRENT_TAG}._
+
+          ENTRY_EOF
+          )
+
+          # Prepend the new entry after the first line (the # heading) of the file.
+          CHANGELOG=".claude/CHANGELOG_AI.md"
+          if [ ! -f "$CHANGELOG" ]; then
+            echo "# AI Changelog — Stack" > "$CHANGELOG"
+          fi
+
+          # Insert the new entry after line 1.
+          FIRST_LINE=$(head -1 "$CHANGELOG")
+          REST=$(tail -n +2 "$CHANGELOG")
+          printf '%s\n%s\n%s\n' "$FIRST_LINE" "$ENTRY" "$REST" > "$CHANGELOG"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$CHANGELOG"
+          git commit -m "chore(release): append AI changelog section for ${CURRENT_TAG}" || true
+          git push origin HEAD:main || echo "::warning::Could not push CHANGELOG_AI.md update — main may be protected. Update manually."

@@ -1,0 +1,95 @@
+# Satisfies: REQ-12-13 (dependency review), Spec 12 §4 (codeql, dependency-review)
+# Weekly security scan: CodeQL SAST + dependency review.
+# Also runs CodeQL on PRs with large diffs (≥300 changed lines) per §4 table.
+
+name: Security Weekly
+
+on:
+  schedule:
+    # Run at 03:00 UTC every Monday.
+    - cron: "0 3 * * 1"
+  # Also run CodeQL on PRs when diff is large (≥300 lines) — controlled via workflow_call
+  # or by the ci.yml triggering this via repository_dispatch. For now: weekly + manual.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write   # to upload CodeQL results to the Security tab
+  actions: read            # required by CodeQL
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "11.1.3"
+
+jobs:
+  codeql:
+    name: CodeQL SAST
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["javascript-typescript"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Use the security-extended query suite to catch High+ findings.
+          queries: security-extended
+
+      - name: Setup pnpm (needed for autobuild to work with pnpm)
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          # Upload results to the GitHub Security tab.
+          upload: always
+
+  dependency-review-weekly:
+    name: Dependency Review (weekly full scan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Full dependency review
+        # Scans the full dependency tree for known CVEs (not just diff-based as in ci.yml).
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: "GPL-2.0, GPL-3.0, AGPL-3.0"
+          # Produce a summary comment on the workflow run summary.
+          comment-summary-in-pr: never
+
+  secret-scan-weekly:
+    name: Secret Scan (full history)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for a complete scan
+
+      - name: Gitleaks full-repo scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

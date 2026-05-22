@@ -28,7 +28,14 @@
     "db:seed:demo": "node --env-file=.env.local scripts/seed-demo.mjs",
     "db:seed:circulation": "node --env-file=.env.local scripts/seed-circulation.mjs",
     "db:seed": "npm run db:seed:demo && npm run db:seed:circulation",
-    "lint:prompts": "node scripts/lint-prompts.mjs"
+    "lint:prompts": "node scripts/lint-prompts.mjs",
+    "check-prompts": "node scripts/check-prompt-changes.mjs",
+    "spec-gate": "node scripts/spec-gate.mjs",
+    "migration-safety": "node scripts/migration-safety.mjs",
+    "smoke-test": "node scripts/smoke-test.mjs",
+    "ai-pr-label": "node scripts/ai-pr-label.mjs",
+    "eval": "node evals/run-evals.mjs",
+    "eval:gate": "node evals/run-evals.mjs --gate"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.189",

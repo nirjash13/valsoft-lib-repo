@@ -1,14 +1,9 @@
 /**
- * AI budget guard — must be called before every LLM invocation.
+ * AI budget guard — must be called before every LLM invocation (REQ-11-03).
  *
- * In Run A (Spec 02): reads the tenant's `ai_monthly_cap_usd` from the tenants
- * table and throws if the cap is null/zero (meaning the tenant has not been
- * configured for AI use). Full per-request usage tracking and monthly accumulation
- * are deferred to Spec 11.
- *
- * TODO (Spec 11 REQ-11-03): after asserting the cap is configured, check the
- * accumulated usage for the current billing period against ai_monthly_cap_usd
- * and throw AiBudgetExceededError if usage + estimatedCostUsd would exceed the cap.
+ * Reads the tenant's `ai_monthly_cap_usd` from the tenants table and the
+ * month-to-date spend from `ai_usage`, then refuses with `AiBudgetExceededError`
+ * if MTD + estimatedCostUsd would exceed the cap.
  *
  * The cap is read via the owner pool (no tenant binding needed — the tenants
  * table itself uses a membership-based RLS policy, not app.tenant_id, so reading
@@ -48,8 +43,7 @@ export class AiBudgetNotConfiguredError extends Error {
  *                           full enforcement is Spec 11).
  *
  * @throws AiBudgetNotConfiguredError if ai_monthly_cap_usd is null or 0.
- * @throws AiBudgetExceededError if estimated cost exceeds the cap (Spec 11 stub:
- *         in Run A this only fires if estimatedCostUsd > capUsd with no accumulated check).
+ * @throws AiBudgetExceededError if MTD spend + estimatedCostUsd exceeds the cap (REQ-11-03).
  */
 export async function assertAiBudget(tenantId: TenantId, estimatedCostUsd: number): Promise<void> {
   const pool = getOwnerPool();

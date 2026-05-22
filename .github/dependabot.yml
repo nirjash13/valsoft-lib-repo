@@ -1,0 +1,90 @@
+# Satisfies: REQ-12-13, Spec 12 §10 (Dependabot)
+# Weekly updates, grouped by ecosystem. Auto-merge for patch npm bumps is handled
+# by the dependabot-auto-merge job in ci.yml (runs after all required checks pass).
+
+version: 2
+
+updates:
+  # ── npm / pnpm ──
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    # Group all patch and minor updates to reduce PR noise.
+    # Major version bumps are kept separate for explicit review.
+    groups:
+      # Patch updates: auto-mergeable after CI + 24h cool-down (ci.yml dependabot-auto-merge job).
+      patch-updates:
+        update-types:
+          - "patch"
+      # Minor AI/SDK updates: grouped but require human review.
+      ai-sdk-minor:
+        patterns:
+          - "ai"
+          - "@ai-sdk/*"
+          - "@anthropic-ai/*"
+          - "@openai/*"
+        update-types:
+          - "minor"
+      # Minor Next.js + React: grouped, human review.
+      nextjs-react-minor:
+        patterns:
+          - "next"
+          - "react"
+          - "react-dom"
+        update-types:
+          - "minor"
+      # Minor Radix UI: grouped, human review.
+      radix-ui-minor:
+        patterns:
+          - "@radix-ui/*"
+        update-types:
+          - "minor"
+      # Minor testing + dev tooling: grouped, human review.
+      dev-tooling-minor:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "@biomejs/biome"
+          - "drizzle-kit"
+          - "drizzle-orm"
+          - "typescript"
+        update-types:
+          - "minor"
+    # Always open PRs against main.
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "npm"
+    # Limit open Dependabot PRs to avoid queue build-up.
+    open-pull-requests-limit: 10
+    # Commit messages follow Conventional Commits so release-changelog.yml picks them up.
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+      include: "scope"
+
+  # ── GitHub Actions ──
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    groups:
+      # Group all GitHub Actions updates (usually patch/minor bumps to action versions).
+      github-actions-all:
+        patterns:
+          - "*"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"

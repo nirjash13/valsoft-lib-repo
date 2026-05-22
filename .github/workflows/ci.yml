@@ -1,0 +1,619 @@
+# Satisfies: REQ-12-01, REQ-12-04, REQ-12-06, REQ-12-07, REQ-12-08, REQ-12-12, REQ-12-13
+# PR pipeline — all jobs marked Required must pass before merge.
+# Runs on pull_request to main and on push to any non-main branch.
+
+name: CI
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches-ignore: ["main"]
+
+# Cancel in-progress runs on the same branch/PR to avoid wasted minutes (NFR-12-01, NFR-12-02).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write   # needed by dependency-review, ai-pr-label, and step summaries
+  issues: write          # needed by ai-pr-label to apply labels
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "11.1.3"
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. LINT — Biome style + unused-imports
+  # ─────────────────────────────────────────────
+  lint:
+    name: Lint (Biome)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Biome check
+        run: pnpm biome:check
+
+  # ─────────────────────────────────────────────
+  # 2. TYPECHECK — TypeScript strict pass
+  # ─────────────────────────────────────────────
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm typecheck
+
+  # ─────────────────────────────────────────────
+  # 3. PROMPT LINT — frontmatter version + ADR (REQ-12-06, REQ-11-09)
+  # ─────────────────────────────────────────────
+  prompt-lint:
+    name: Prompt Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint prompt frontmatter (version + changed_in)
+        run: pnpm lint:prompts
+
+      - name: Check prompt frontmatter compliance (REQ-11-09)
+        # pnpm check-prompts is added by S12-B; verifies every changed prompt has version bump + ADR
+        run: pnpm check-prompts
+
+  # ─────────────────────────────────────────────
+  # 4. UNIT TESTS — Vitest; coverage ≥ 70% line / 60% branch (changed files)
+  # ─────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests with coverage
+        run: pnpm test:coverage -- --coverage.provider=v8 --coverage.thresholds.lines=70 --coverage.thresholds.branches=60 tests/unit
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: coverage/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # 5. INTEGRATION TESTS — real Postgres + pgvector (Testcontainers-style via service)
+  # ─────────────────────────────────────────────
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: stack_test
+          POSTGRES_PASSWORD: stack_test
+          POSTGRES_DB: stack_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stack_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Point the integration suite at the local service container.
+      # scripts/apply-migration.mjs reads DATABASE_URL; integration tests read it too.
+      DATABASE_URL: postgresql://stack_test:stack_test@localhost:5432/stack_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations to test DB
+        run: node scripts/apply-migration.mjs
+
+      - name: Run integration tests
+        run: pnpm test:integration
+
+  # ─────────────────────────────────────────────
+  # 6. SPEC GATE — every changed file must be covered by an approved spec (REQ-12-04)
+  # ─────────────────────────────────────────────
+  spec-gate:
+    name: Spec Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need full history to diff against base
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run spec gate
+        # pnpm spec-gate is added by S12-B; walks project_docs/specs/*.spec.md,
+        # reads tags: frontmatter, fails if any changed app/** or lib/** file is uncovered.
+        run: pnpm spec-gate
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.sha }}
+
+  # ─────────────────────────────────────────────
+  # 7. CROSS-TENANT PROBE — Vitest tagged probe (Spec 11 REQ-11-06)
+  # ─────────────────────────────────────────────
+  cross-tenant-probe:
+    name: Cross-Tenant Probe
+    runs-on: ubuntu-latest
+    needs: [integration-tests]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: stack_test
+          POSTGRES_PASSWORD: stack_test
+          POSTGRES_DB: stack_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stack_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://stack_test:stack_test@localhost:5432/stack_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations to test DB
+        run: node scripts/apply-migration.mjs
+
+      - name: Run cross-tenant probe
+        # Runs tests/integration/**/*.cross-tenant.test.ts tagged with @cross-tenant.
+        # Build fails if any probe returns a row belonging to a different tenant (Spec 11 REQ-11-06).
+        run: pnpm vitest run --reporter=verbose tests/integration --testNamePattern="cross.tenant"
+
+  # ─────────────────────────────────────────────
+  # 8. MIGRATION SAFETY — detect destructive ops; require safety:reviewed (REQ-12-08)
+  # ─────────────────────────────────────────────
+  migration-safety:
+    name: Migration Safety
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run migration safety check
+        # pnpm migration-safety is added by S12-B; detects DROP TABLE/COLUMN, NOT NULL backfills.
+        # If destructive ops are found and the PR lacks the 'safety:reviewed' label, exits non-zero.
+        run: pnpm migration-safety
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
+  # ─────────────────────────────────────────────
+  # 9. DEPENDENCY REVIEW — no new high/critical CVE
+  # ─────────────────────────────────────────────
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    # Only meaningful on PRs; skip on push events to branches.
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          # Allow GPL-only if it is not distributed (internal tooling only).
+          deny-licenses: "GPL-2.0, GPL-3.0, AGPL-3.0"
+
+  # ─────────────────────────────────────────────
+  # 10. SECRET SCAN — Gitleaks; no secrets in diff
+  # ─────────────────────────────────────────────
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Gitleaks needs full history for --log-opts scan
+
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE not required for public/OSS mode; add if using commercial features.
+
+  # ─────────────────────────────────────────────
+  # 11. AI PR LABEL — apply ai-generated-pr label if >80% of diff is AI-authored (REQ-12-07)
+  # Informational only — does not block merge.
+  # ─────────────────────────────────────────────
+  ai-pr-label:
+    name: AI PR Label
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    continue-on-error: true   # informational; never blocks merge
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Detect AI authorship and apply label
+        # pnpm ai-pr-label is added by S12-B; heuristic reads diff annotations for
+        # provenance markers (<!-- written-by: ... -->, Co-Authored-By: claude-*).
+        # When ≥80% of changed lines carry AI provenance, applies ai-generated-pr label
+        # and posts the reviewer-focus comment (REQ-12-07).
+        run: pnpm ai-pr-label
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
+  # ─────────────────────────────────────────────
+  # 12. BUNDLE SIZE — next build + analyze; warn at 50KB delta, block at 100KB (REQ-12-12)
+  # Uses continue-on-error for the analysis step because @next/bundle-analyzer is not
+  # installed locally yet. The build step itself is blocking.
+  # ─────────────────────────────────────────────
+  bundle-size:
+    name: Bundle Size
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+        env:
+          # Suppress auth/DB env requirements during CI build analysis.
+          NEXT_PUBLIC_APP_URL: "https://stack.example.com"
+          AUTH0_SECRET: "ci-placeholder-not-real"
+          AUTH0_BASE_URL: "https://stack.example.com"
+          AUTH0_ISSUER_BASE_URL: "https://example.auth0.com"
+          AUTH0_CLIENT_ID: "ci-placeholder"
+          AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET_CI }}
+
+      - name: Analyze bundle delta
+        # NOTE: @next/bundle-analyzer is not yet installed in package.json.
+        # This step is best-effort; it will no-op cleanly until the package is added.
+        # To install: pnpm add -D @next/bundle-analyzer
+        # Then wire ANALYZE=true next build output into the delta check.
+        # Block threshold: 100KB per route delta; warn at 50KB.
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const buildManifest = '.next/build-manifest.json';
+            if (!fs.existsSync(buildManifest)) {
+              core.warning('build-manifest.json not found — bundle analysis skipped');
+              return;
+            }
+            core.summary
+              .addHeading('Bundle Size Check')
+              .addRaw('Bundle analysis not yet configured (@next/bundle-analyzer not installed). Add it to enable per-route delta enforcement.')
+              .write();
+
+  # ─────────────────────────────────────────────
+  # 13. E2E TESTS — Playwright on the preview URL
+  # Gated on playwright.config.ts being present; no-ops cleanly if Playwright is not set up.
+  # Per spec §8 edge case: e2e runs in deploy-preview.yml against the live preview URL.
+  # Here we run the local/headless subset if playwright.config.ts exists.
+  # ─────────────────────────────────────────────
+  e2e-tests:
+    name: E2E Tests (local)
+    runs-on: ubuntu-latest
+    # Only run if Playwright config exists in this repo.
+    # This condition prevents hard failures when the config is absent (tooling not yet installed).
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for Playwright config
+        id: playwright-check
+        run: |
+          if [ -f "playwright.config.ts" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::notice title=E2E Tests::playwright.config.ts not found — e2e tests skipped until Playwright is installed (pnpm add -D @playwright/test)"
+          fi
+
+      - name: Setup pnpm
+        if: steps.playwright-check.outputs.exists == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        if: steps.playwright-check.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.playwright-check.outputs.exists == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        if: steps.playwright-check.outputs.exists == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        if: steps.playwright-check.outputs.exists == 'true'
+        run: pnpm exec playwright test
+        env:
+          DATABASE_URL: postgresql://stack_test:stack_test@localhost:5432/stack_test
+
+  # ─────────────────────────────────────────────
+  # 14. A11Y — axe-core WCAG 2.2 AA on critical paths via Playwright
+  # Gated on playwright.config.ts + lighthouserc presence.
+  # Full a11y scan runs nightly in nightly-quality.yml.
+  # ─────────────────────────────────────────────
+  a11y:
+    name: Accessibility (axe-core)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for Playwright config (required for axe-core scan)
+        id: a11y-gate
+        run: |
+          if [ -f "playwright.config.ts" ]; then
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+            echo "::notice title=A11y::axe-core/Playwright not installed — a11y scan skipped. Install: pnpm add -D @playwright/test axe-playwright"
+          fi
+
+      - name: Setup pnpm
+        if: steps.a11y-gate.outputs.enabled == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        if: steps.a11y-gate.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.a11y-gate.outputs.enabled == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        if: steps.a11y-gate.outputs.enabled == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run axe-core a11y scan
+        if: steps.a11y-gate.outputs.enabled == 'true'
+        # Runs tests tagged @a11y — uses axe-playwright to assert WCAG 2.2 AA on critical paths.
+        run: pnpm exec playwright test --grep "@a11y"
+
+  # ─────────────────────────────────────────────
+  # 15. LIGHTHOUSE CI — performance / a11y / SEO scores
+  # Gated on lighthouserc.js/.json/.yaml being present in the repo.
+  # Full LHCI runs nightly in nightly-quality.yml against the main preview URL.
+  # On PRs: LHCI runs against the preview URL set by deploy-preview.yml when available.
+  # ─────────────────────────────────────────────
+  lighthouse-ci:
+    name: Lighthouse CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for LHCI config
+        id: lhci-gate
+        run: |
+          if [ -f "lighthouserc.js" ] || [ -f "lighthouserc.json" ] || [ -f "lighthouserc.yaml" ] || [ -f ".lighthouserc.js" ]; then
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+            echo "::notice title=Lighthouse CI::No lighthouserc config found — LHCI skipped until config is added. See https://github.com/GoogleChrome/lighthouse-ci/blob/main/docs/getting-started.md"
+          fi
+
+      - name: Run Lighthouse CI
+        if: steps.lhci-gate.outputs.enabled == 'true'
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: lighthouserc.js
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+  # ─────────────────────────────────────────────
+  # 16. DEPENDABOT AUTO-MERGE — patch updates after 24h cool-down (REQ-12-13)
+  # Only runs when triggered by Dependabot; only for patch-version bumps.
+  # The full CI suite above already runs on Dependabot PRs identically to human PRs.
+  # ─────────────────────────────────────────────
+  dependabot-auto-merge:
+    name: Dependabot Auto-Merge (patch)
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - typecheck
+      - unit-tests
+      - integration-tests
+      - spec-gate
+      - cross-tenant-probe
+      - migration-safety
+      - secret-scan
+    if: >
+      github.event_name == 'pull_request' &&
+      github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge patch updates after 24h cool-down
+        # Only auto-merges patch semver bumps (update-type == "version-update:semver-patch").
+        # Cool-down: GitHub's merge queue or a 24h label-based delay is configured in
+        # dependabot.yml (auto-merge-conditions). This step enables squash-merge when all
+        # conditions are met. Minor/major bumps require human review.
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

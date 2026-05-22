@@ -37,5 +37,7 @@ desktop.ini
 !.claude/scratch/.gitignore
 .claude/worktrees/
 
-# Private docs (analysis, design, ADRs — not for public repo)
-/docs
+# Private docs (analysis, design — not for public repo)
+# Exception: docs/decisions/ contains ADRs that are committed and reviewed in CI
+/docs/*
+!/docs/decisions/

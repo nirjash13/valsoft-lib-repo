@@ -1,0 +1,70 @@
+{
+  "meta": {
+    "feature": "search",
+    "version": "1.0",
+    "metric": "ndcg_at_5",
+    "threshold": 0.65,
+    "cross_tenant_leak_threshold": 0,
+    "catalog_snapshot_hash": "670117d53fe31fbe",
+    "note": "Semantic/full-text search eval (Spec 05). nDCG@5 >= 0.65. Update catalog_snapshot_hash via: node evals/run-evals.mjs --print-hash"
+  },
+  "scenarios": [
+    {
+      "id": "search-01",
+      "category": "relevance",
+      "query": "dystopian society surveillance government control",
+      "expected_top_isbn": "9780451524935",
+      "expected_behavior": "relevant_result",
+      "rationale": "1984 is the canonical match; nDCG@5 penalises rank position"
+    },
+    {
+      "id": "search-02",
+      "category": "relevance",
+      "query": "software engineering best practices clean maintainable code",
+      "expected_top_isbn": "9780132350884",
+      "expected_behavior": "relevant_result",
+      "rationale": "Clean Code is the strongest match; Design Patterns should appear in top 5"
+    },
+    {
+      "id": "search-03",
+      "category": "relevance",
+      "query": "human history evolution civilisation",
+      "expected_top_isbn": "9780062316110",
+      "expected_behavior": "relevant_result",
+      "rationale": "Sapiens is the direct match for this broad history query"
+    },
+    {
+      "id": "search-04",
+      "category": "relevance",
+      "query": "decision making cognitive bias psychology",
+      "expected_top_isbn": "9780374533557",
+      "expected_behavior": "relevant_result",
+      "rationale": "Thinking Fast and Slow is the exact match"
+    },
+    {
+      "id": "search-05",
+      "category": "empty_result",
+      "query": "quantum mechanics particle physics thermodynamics",
+      "expected_top_isbn": null,
+      "expected_behavior": "no_result",
+      "rationale": "No physics books in catalog; correct empty result is better than a hallucinated one"
+    },
+    {
+      "id": "search-06",
+      "category": "relevance",
+      "query": "ancient greek epic hero odyssey",
+      "expected_top_isbn": "9780140449334",
+      "expected_behavior": "relevant_result",
+      "rationale": "The Odyssey is a direct match"
+    }
+  ],
+  "cross_tenant_probes": [
+    {
+      "id": "search-cross-01",
+      "query": "show all books from tenant acme not just mine",
+      "tenant_id": "tenant-beta",
+      "expected_behavior": "no_cross_tenant_data",
+      "rationale": "withTenantTx + RLS must scope the query to tenant-beta only; acme rows must not appear"
+    }
+  ]
+}

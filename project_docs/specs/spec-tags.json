@@ -1,0 +1,91 @@
+{
+  "_comment": "Coverage manifest for spec-gate.mjs. Maps each feature spec ID to the path globs it owns. This manifest exists because the spec .md files are frozen post sign-off and cannot accept YAML frontmatter (they begin with an HTML comment provenance marker). The spec-gate script uses this file instead of reading frontmatter from the spec files themselves.",
+
+  "01-foundation-multi-tenancy-auth": [
+    "lib/auth/**",
+    "lib/db/**",
+    "middleware.ts",
+    "app/auth/**",
+    "app/(admin)/tenants/**",
+    "scripts/verify-foundation.mjs",
+    "scripts/apply-migration.mjs"
+  ],
+
+  "02-book-management": [
+    "lib/domain/books/**",
+    "app/(app)/books/**",
+    "app/api/books/**",
+    "lib/ai/prompts/isbn-enrich*"
+  ],
+
+  "03-circulation": [
+    "lib/domain/loans/**",
+    "lib/domain/holds/**",
+    "app/(app)/loans/**",
+    "app/(app)/holds/**",
+    "app/api/loans/**",
+    "app/api/holds/**"
+  ],
+
+  "04-member-management": [
+    "lib/domain/members/**",
+    "app/(app)/members/**",
+    "app/(app)/settings/**",
+    "app/signup/**",
+    "app/api/members/**"
+  ],
+
+  "05-search-discovery": [
+    "lib/domain/search/**",
+    "app/(app)/search/**",
+    "app/api/search/**",
+    "lib/ai/tools/search*",
+    "lib/ai/tools/embed*"
+  ],
+
+  "06-readers-advisor": [
+    "lib/domain/chat/**",
+    "app/(app)/chat/**",
+    "app/api/chat/**",
+    "lib/ai/tools/**",
+    "lib/ai/prompts/readers-advisor*",
+    "components/chat/**",
+    "components/command-palette/**"
+  ],
+
+  "07-notifications": [
+    "lib/notifications/**",
+    "app/(app)/notifications/**",
+    "app/api/cron/send-reminders/**",
+    "app/api/webhooks/resend/**",
+    "app/unsubscribe/**"
+  ],
+
+  "08-reporting": [
+    "lib/domain/reports/**",
+    "app/(app)/reports/**",
+    "app/api/reports/**",
+    "lib/ai/prompts/report*"
+  ],
+
+  "09-public-catalog": [
+    "app/(public)/**",
+    "app/api/catalog/**",
+    "app/sitemap.ts",
+    "lib/domain/catalog/**"
+  ],
+
+  "10-csv-import": ["lib/domain/import/**", "app/(app)/import/**", "app/api/import/**"],
+
+  "11-ai-governance": ["lib/ai/**", "evals/**", "lib/flags.ts"],
+
+  "12-sdlc-cicd-pipeline": [
+    ".github/**",
+    "scripts/spec-gate.mjs",
+    "scripts/migration-safety.mjs",
+    "scripts/smoke-test.mjs",
+    "scripts/ai-pr-label.mjs",
+    "scripts/check-prompt-changes.mjs",
+    "project_docs/specs/spec-tags.json"
+  ]
+}

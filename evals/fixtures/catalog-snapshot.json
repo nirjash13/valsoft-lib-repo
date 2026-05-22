@@ -1,0 +1,53 @@
+{
+  "_comment": "Synthetic catalog snapshot used by the eval runner to validate catalog_snapshot_hash in dataset files. Update this file (and re-hash) whenever DEMO_BOOKS in scripts/seed-demo.mjs changes. Run: node evals/run-evals.mjs --print-hash to print the current hash.",
+  "books": [
+    {
+      "isbn13": "9780451524935",
+      "title": "1984",
+      "authors": ["George Orwell"],
+      "genre": "Dystopian Fiction"
+    },
+    {
+      "isbn13": "9780062316097",
+      "title": "The Alchemist",
+      "authors": ["Paulo Coelho"],
+      "genre": "Fiction"
+    },
+    {
+      "isbn13": "9780743273565",
+      "title": "The Great Gatsby",
+      "authors": ["F. Scott Fitzgerald"],
+      "genre": "Classic Fiction"
+    },
+    {
+      "isbn13": "9780132350884",
+      "title": "Clean Code",
+      "authors": ["Robert C. Martin"],
+      "genre": "Software Engineering"
+    },
+    {
+      "isbn13": "9780201633610",
+      "title": "Design Patterns",
+      "authors": ["Erich Gamma", "Richard Helm", "Ralph Johnson", "John Vlissides"],
+      "genre": "Software Engineering"
+    },
+    {
+      "isbn13": "9780062316110",
+      "title": "Sapiens",
+      "authors": ["Yuval Noah Harari"],
+      "genre": "History / Anthropology"
+    },
+    {
+      "isbn13": "9780374533557",
+      "title": "Thinking, Fast and Slow",
+      "authors": ["Daniel Kahneman"],
+      "genre": "Psychology / Cognitive Science"
+    },
+    {
+      "isbn13": "9780140449334",
+      "title": "The Odyssey",
+      "authors": ["Homer"],
+      "genre": "Epic Poetry / Classics"
+    }
+  ]
+}

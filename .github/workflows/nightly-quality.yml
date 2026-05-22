@@ -1,0 +1,207 @@
+# Satisfies: REQ-12-11
+# Nightly at 02:00 UTC: Lighthouse CI + link check + a11y against the main preview URL.
+# Posts a GitHub issue / step summary if any LHCI score drops below threshold.
+# Thresholds: Performance ≥ 80, Accessibility ≥ 95, SEO ≥ 95.
+#
+# LHCI and Playwright/axe-core are gated on config file presence so this workflow
+# no-ops cleanly until the tooling is installed (same pattern as ci.yml).
+
+name: Nightly Quality
+
+on:
+  schedule:
+    # Run at 02:00 UTC every night.
+    - cron: "0 2 * * *"
+  # Allow manual trigger for debugging.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write   # to create quality-gate issue on threshold breach
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "11.1.3"
+  # The stable preview URL for the main branch.
+  # Set MAIN_PREVIEW_URL as a repository secret or variable once Vercel assigns one.
+  AUDIT_URL: ${{ vars.MAIN_PREVIEW_URL || 'https://stack.vercel.app' }}
+
+jobs:
+  lighthouse:
+    name: Lighthouse CI (Performance ≥80 / A11y ≥95 / SEO ≥95)
+    runs-on: ubuntu-latest
+    outputs:
+      lhci-passed: ${{ steps.lhci-run.outputs.passed }}
+      lhci-report: ${{ steps.lhci-run.outputs.report_summary }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for LHCI config
+        id: lhci-gate
+        run: |
+          if [ -f "lighthouserc.js" ] || [ -f "lighthouserc.json" ] || [ -f "lighthouserc.yaml" ] || [ -f ".lighthouserc.js" ]; then
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+            echo "::notice title=Lighthouse CI::No lighthouserc config found — LHCI skipped."
+            echo "::notice::To enable: add lighthouserc.js targeting ${AUDIT_URL} with thresholds perf>=80, a11y>=95, seo>=95"
+          fi
+
+      - name: Run Lighthouse CI
+        id: lhci-run
+        if: steps.lhci-gate.outputs.enabled == 'true'
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: lighthouserc.js
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+          urls: ${{ env.AUDIT_URL }}
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Mark LHCI as skipped (config absent)
+        if: steps.lhci-gate.outputs.enabled == 'false'
+        run: echo "passed=skipped" >> $GITHUB_OUTPUT
+
+  a11y-nightly:
+    name: Accessibility Audit (axe-core, WCAG 2.2 AA)
+    runs-on: ubuntu-latest
+    outputs:
+      a11y-passed: ${{ steps.a11y-run.outputs.passed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for Playwright config
+        id: pw-gate
+        run: |
+          if [ -f "playwright.config.ts" ]; then
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+            echo "::notice title=A11y Nightly::playwright.config.ts not found — a11y nightly scan skipped."
+          fi
+
+      - name: Setup pnpm
+        if: steps.pw-gate.outputs.enabled == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        if: steps.pw-gate.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.pw-gate.outputs.enabled == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        if: steps.pw-gate.outputs.enabled == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run axe-core a11y scan against main preview
+        id: a11y-run
+        if: steps.pw-gate.outputs.enabled == 'true'
+        run: pnpm exec playwright test --grep "@a11y"
+        env:
+          BASE_URL: ${{ env.AUDIT_URL }}
+
+      - name: Mark a11y as skipped (config absent)
+        if: steps.pw-gate.outputs.enabled == 'false'
+        run: echo "passed=skipped" >> $GITHUB_OUTPUT
+
+  link-check:
+    name: Link Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check internal + external links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          # Check docs/ and project_docs/ for broken links; skip node_modules + .next.
+          args: >
+            --verbose
+            --no-progress
+            --exclude-path node_modules
+            --exclude-path .next
+            --exclude-path .claude/scratch
+            --timeout 30
+            docs/**/*.md
+            project_docs/**/*.md
+            README.md
+          fail: false   # link failures are advisory only; they don't block the nightly
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  quality-report:
+    name: Quality Summary Report
+    runs-on: ubuntu-latest
+    needs: [lighthouse, a11y-nightly, link-check]
+    if: always()
+    steps:
+      - name: Build quality summary
+        id: summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lhciPassed = '${{ needs.lighthouse.outputs.lhci-passed }}';
+            const a11yPassed = '${{ needs.a11y-nightly.outputs.a11y-passed }}';
+
+            // Determine if any real (non-skipped) job failed.
+            const lhciFailed = lhciPassed === 'false';
+            const a11yFailed = a11yPassed === 'false';
+            const anyFailed = lhciFailed || a11yFailed;
+
+            const statusIcon = (v) => v === 'skipped' ? '⏭️ skipped' : v === 'true' ? '✅ passed' : '❌ failed';
+
+            const summary = [
+              '## Nightly Quality Report',
+              `**Date:** ${new Date().toISOString().split('T')[0]}`,
+              `**Audit URL:** ${process.env.AUDIT_URL || 'https://stack.vercel.app'}`,
+              '',
+              '| Check | Status |',
+              '|-------|--------|',
+              `| Lighthouse CI (Perf ≥80, A11y ≥95, SEO ≥95) | ${statusIcon(lhciPassed)} |`,
+              `| axe-core WCAG 2.2 AA | ${statusIcon(a11yPassed)} |`,
+              `| Link check | advisory |`,
+            ].join('\n');
+
+            await core.summary.addRaw(summary).write();
+
+            return { anyFailed, summary };
+
+      - name: Open quality issue on threshold breach
+        if: needs.lighthouse.result == 'failure' || needs.a11y-nightly.result == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const today = new Date().toISOString().split('T')[0];
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly quality gate failed — ${today}`,
+              body: [
+                '## Nightly Quality Gate Failure',
+                '',
+                `One or more quality thresholds were breached on ${today}.`,
+                `**Run:** [View nightly run](${runUrl})`,
+                '',
+                '**Thresholds:**',
+                '- Lighthouse Performance ≥ 80',
+                '- Lighthouse Accessibility ≥ 95',
+                '- Lighthouse SEO ≥ 95',
+                '- axe-core: 0 WCAG 2.2 AA violations on critical paths',
+                '',
+                'Please investigate and resolve before the next release.',
+              ].join('\n'),
+              labels: ['quality', 'nightly'],
+            });

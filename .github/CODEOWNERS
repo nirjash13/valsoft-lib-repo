@@ -1,0 +1,30 @@
+# CODEOWNERS — Stack repo
+#
+# Real GitHub handles are filled in at repo setup. Replace the placeholder
+# @stack-* teams with actual GitHub team slugs (e.g. @valsoft/ai-reviewers).
+#
+# Rules are evaluated last-match-wins (GitHub docs). Keep specific patterns
+# ABOVE the catch-all `*` so they take precedence.
+
+# Default owner for everything not matched below.
+*                                   @stack-maintainers
+
+# AI infrastructure — highest-risk surface; requires AI-specialist review.
+# Covers the gateway, routing, prompts, tools, budget, tracing (REQ-12-14, §10).
+lib/ai/**                           @stack-ai-reviewers @stack-maintainers
+
+# Database schema and migrations — destructive-migration gate (REQ-12-08).
+lib/db/**                           @stack-platform @stack-maintainers
+drizzle/**                          @stack-platform @stack-maintainers
+
+# CI/CD and GitHub configuration — platform owner must approve infra changes.
+.github/**                          @stack-platform @stack-maintainers
+
+# Scripts that gate CI — same owner as .github because they form the pipeline.
+scripts/**                          @stack-platform @stack-maintainers
+
+# Feature specifications — frozen post sign-off; changes need maintainer sign-off.
+project_docs/specs/**               @stack-maintainers
+
+# Auth layer — changes here affect every tenant's security boundary.
+lib/auth/**                         @stack-platform @stack-maintainers

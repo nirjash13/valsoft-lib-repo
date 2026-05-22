@@ -1,0 +1,177 @@
+# Satisfies: REQ-12-02, NFR-12-03
+# On PR open/update: provision a Neon DB branch, run migrations, deploy Vercel preview,
+# post a PR comment with the preview URL + Neon branch name.
+# Target: push-to-URL-ready ≤ 4 minutes (NFR-12-03).
+
+name: Deploy Preview
+
+on:
+  pull_request:
+    branches: ["main"]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: deploy-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write   # to post preview URL comment
+  deployments: write     # to create deployment status
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "11.1.3"
+
+jobs:
+  preview:
+    name: Preview Deploy (Vercel + Neon branch)
+    runs-on: ubuntu-latest
+    outputs:
+      neon-branch-name: ${{ steps.neon-branch.outputs.branch_name }}
+      preview-url: ${{ steps.vercel-deploy.outputs.preview_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Step 1: Create a Neon database branch from the latest main branch's tip ──
+      - name: Create Neon preview branch
+        id: neon-branch
+        run: |
+          BRANCH_NAME="pr-${{ github.event.pull_request.number }}-${{ github.sha }}"
+          echo "Creating Neon branch: ${BRANCH_NAME}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.NEON_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            "https://console.neon.tech/api/v2/projects/${{ secrets.NEON_PROJECT_ID }}/branches" \
+            -d "{
+              \"branch\": {
+                \"name\": \"${BRANCH_NAME}\",
+                \"parent_id\": \"${{ secrets.NEON_MAIN_BRANCH_ID }}\"
+              },
+              \"endpoints\": [{\"type\": \"read_write\"}]
+            }")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          if [ "$HTTP_STATUS" != "201" ]; then
+            echo "::error::Failed to create Neon branch (HTTP $HTTP_STATUS): $BODY"
+            exit 1
+          fi
+
+          BRANCH_ID=$(echo "$BODY" | jq -r '.branch.id')
+          DB_HOST=$(echo "$BODY" | jq -r '.endpoints[0].host')
+
+          echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          echo "branch_id=${BRANCH_ID}" >> $GITHUB_OUTPUT
+          echo "db_host=${DB_HOST}" >> $GITHUB_OUTPUT
+          echo "::notice title=Neon Branch::Created branch ${BRANCH_NAME} (id: ${BRANCH_ID})"
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+
+      # ── Step 2: Run migrations against the new Neon branch ──
+      - name: Apply migrations to Neon preview branch
+        run: node scripts/apply-migration.mjs
+        env:
+          # Construct the DATABASE_URL for the new Neon branch using the branch's host.
+          # User/password are the same Neon role credentials; DB name is 'neondb' by default.
+          DATABASE_URL: "postgresql://${{ secrets.NEON_DB_USER }}:${{ secrets.NEON_DB_PASSWORD }}@${{ steps.neon-branch.outputs.db_host }}/neondb?sslmode=require"
+
+      # ── Step 3: Deploy to Vercel preview ──
+      - name: Deploy to Vercel (preview)
+        id: vercel-deploy
+        run: |
+          # Install Vercel CLI locally (not a devDependency to avoid bloating prod builds).
+          pnpm add -g vercel@latest
+
+          # Link the project (uses pre-configured .vercel/project.json from the repo,
+          # or falls back to org/project IDs from env).
+          vercel pull --yes \
+            --environment=preview \
+            --token=${{ secrets.VERCEL_TOKEN }}
+
+          # Build and deploy; capture the preview URL from stdout.
+          PREVIEW_URL=$(vercel deploy \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --env DATABASE_URL="postgresql://${{ secrets.NEON_DB_USER }}:${{ secrets.NEON_DB_PASSWORD }}@${{ steps.neon-branch.outputs.db_host }}/neondb?sslmode=require" \
+            --yes \
+            2>&1 | grep -E "^https://" | tail -1)
+
+          if [ -z "$PREVIEW_URL" ]; then
+            echo "::error::Vercel deploy did not emit a preview URL"
+            exit 1
+          fi
+
+          echo "preview_url=${PREVIEW_URL}" >> $GITHUB_OUTPUT
+          echo "::notice title=Preview URL::${PREVIEW_URL}"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # ── Step 4: Post PR comment with preview URL + Neon branch name ──
+      - name: Post preview comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const previewUrl = '${{ steps.vercel-deploy.outputs.preview_url }}';
+            const neonBranch = '${{ steps.neon-branch.outputs.branch_name }}';
+            const sha = context.sha.substring(0, 7);
+
+            const body = [
+              '## Preview Deployment',
+              '',
+              `| | |`,
+              `|---|---|`,
+              `| **Preview URL** | [${previewUrl}](${previewUrl}) |`,
+              `| **Neon branch** | \`${neonBranch}\` |`,
+              `| **Commit** | \`${sha}\` |`,
+              '',
+              '> This preview talks to an isolated Neon database branch — not production.',
+              '> The branch is deleted automatically when this PR is closed (REQ-12-03).',
+            ].join('\n');
+
+            // Find and update an existing preview comment, or create a new one.
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.data.find(c =>
+              c.user?.login === 'github-actions[bot]' &&
+              c.body?.includes('## Preview Deployment')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

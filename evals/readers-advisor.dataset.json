@@ -4,8 +4,8 @@
     "version": "1.0",
     "refusal_accuracy_threshold": 0.9,
     "cross_tenant_leak_threshold": 0,
-    "catalog_snapshot_hash": "TBD",
-    "note": "CI eval runner is defined in Spec 11; this file is the dataset only — update catalog_snapshot_hash when seed-demo catalog changes"
+    "catalog_snapshot_hash": "670117d53fe31fbe",
+    "note": "Update catalog_snapshot_hash by running: node evals/run-evals.mjs --print-hash. Must match evals/fixtures/catalog-snapshot.json"
   },
   "dialogues": [
     {

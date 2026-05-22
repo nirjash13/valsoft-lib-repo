@@ -1,4 +1,4 @@
-import { integer, numeric, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { integer, numeric, pgTable, text, uuid, varchar } from "drizzle-orm/pg-core";
 import { type Branded, createdAt, tenantIdColumn } from "./_shared";
 
 export type AiUsageId = Branded<string, "AiUsageId">;
@@ -35,6 +35,11 @@ export const aiUsage = pgTable("ai_usage", {
   costUsd: numeric("cost_usd", { precision: 10, scale: 4 }).notNull().default("0"),
   threadId: uuid("thread_id"),
   latencyMs: integer("latency_ms"),
+  /**
+   * Langfuse span ID (16-char hex) for cross-referencing traces (REQ-11-02, REQ-11-07).
+   * Nullable — legacy rows and non-chat calls may omit it.
+   */
+  spanId: varchar("span_id", { length: 64 }),
   createdAt: createdAt(),
 });
 

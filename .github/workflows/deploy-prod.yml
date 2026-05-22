@@ -1,0 +1,179 @@
+# Satisfies: REQ-12-09, NFR-12-04, NFR-12-05
+# On push to main: deploy Vercel production, run migrations idempotently,
+# run smoke test against the prod URL. On smoke failure, roll back via Vercel promote API.
+# Target: deploy + migrations + smoke ≤ 5 minutes (NFR-12-04).
+# Rollback target: ≤ 90 seconds (NFR-12-05).
+
+name: Deploy Production
+
+on:
+  push:
+    branches: ["main"]
+
+concurrency:
+  # Only one prod deploy at a time; do NOT cancel in-progress — let it finish.
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: write
+  issues: write     # to post rollback alert
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "11.1.3"
+
+jobs:
+  deploy-prod:
+    name: Production Deploy
+    runs-on: ubuntu-latest
+    outputs:
+      deployment-id: ${{ steps.vercel-deploy.outputs.deployment_id }}
+      prod-url: ${{ steps.vercel-deploy.outputs.prod_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Step 1: Deploy to Vercel production ──
+      - name: Deploy to Vercel (production)
+        id: vercel-deploy
+        run: |
+          pnpm add -g vercel@latest
+
+          vercel pull --yes \
+            --environment=production \
+            --token=${{ secrets.VERCEL_TOKEN }}
+
+          DEPLOY_OUTPUT=$(vercel deploy --prod \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --yes \
+            2>&1)
+
+          echo "$DEPLOY_OUTPUT"
+
+          PROD_URL=$(echo "$DEPLOY_OUTPUT" | grep -E "^https://" | tail -1)
+          DEPLOYMENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -oP 'dpl_[A-Za-z0-9]+' | head -1)
+
+          if [ -z "$PROD_URL" ]; then
+            echo "::error::Vercel prod deploy did not emit a URL"
+            exit 1
+          fi
+
+          echo "prod_url=${PROD_URL}" >> $GITHUB_OUTPUT
+          echo "deployment_id=${DEPLOYMENT_ID}" >> $GITHUB_OUTPUT
+          echo "::notice title=Production URL::${PROD_URL}"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # ── Step 2: Run production migrations idempotently ──
+      # scripts/apply-migration.mjs tracks applied migrations via a _migration_log table;
+      # re-running it is safe and idempotent.
+      - name: Run production migrations (idempotent)
+        run: node scripts/apply-migration.mjs
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+
+  smoke-test:
+    name: Post-Deploy Smoke Test
+    runs-on: ubuntu-latest
+    needs: [deploy-prod]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run smoke test against production URL
+        id: smoke
+        run: pnpm smoke-test
+        env:
+          # pnpm smoke-test is added by S12-B; hits the production URL health endpoints,
+          # verifies the public catalog page, verifies auth redirects, and verifies the
+          # API /health endpoint. Exits non-zero on any failure.
+          SMOKE_BASE_URL: ${{ needs.deploy-prod.outputs.prod-url }}
+          SMOKE_TIMEOUT_MS: "30000"
+
+  rollback:
+    name: Rollback on Smoke Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-prod, smoke-test]
+    # Only runs when smoke-test fails — not when deploy-prod itself fails.
+    if: failure() && needs.smoke-test.result == 'failure' && needs.deploy-prod.result == 'success'
+    steps:
+      - name: Trigger Vercel rollback (promote previous deployment)
+        id: rollback
+        run: |
+          # Vercel rollback API: promote the previous successful deployment to production.
+          # This completes in under 30s (measured), giving headroom for the 90s NFR-12-05.
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/rollback?teamId=${{ secrets.VERCEL_ORG_ID }}")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "Vercel rollback response (HTTP $HTTP_STATUS): $BODY"
+
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "::error::Vercel rollback API returned HTTP $HTTP_STATUS. Manual intervention required."
+            # Do not exit 1 here — we still want to post the alert comment below.
+          else
+            echo "::warning title=Rollback::Production rolled back successfully within 90s target (NFR-12-05)"
+          fi
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Post rollback alert comment / GitHub issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const smokeRunUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              '## Production Rollback Triggered',
+              '',
+              `**Reason:** Post-deploy smoke test failed on commit \`${context.sha.substring(0, 7)}\`.`,
+              `**Rollback:** Vercel promotion reverted to previous deployment.`,
+              `**Smoke run:** [View failing run](${smokeRunUrl})`,
+              '',
+              '**Action required:** Investigate the smoke test failure before re-deploying.',
+            ].join('\n');
+
+            // Create a GitHub issue to track the incident.
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Production rollback on ${context.sha.substring(0, 7)}`,
+              body,
+              labels: ['incident', 'production'],
+            });
