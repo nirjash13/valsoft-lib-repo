@@ -34,6 +34,18 @@ function isBypassPath(pathname: string): boolean {
   for (const prefix of BYPASS_PREFIXES) {
     if (pathname.startsWith(prefix)) return true;
   }
+
+  // Bypass /[tenant]/catalog and sub-routes (e.g. /[tenant]/catalog/...)
+  const parts = pathname.split("/");
+  if (parts.length >= 3 && parts[2] === "catalog") {
+    return true;
+  }
+
+  // Bypass global sitemap.xml
+  if (pathname === "/sitemap.xml") {
+    return true;
+  }
+
   return false;
 }
 

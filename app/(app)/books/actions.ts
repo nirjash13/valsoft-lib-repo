@@ -15,6 +15,7 @@
 "use server";
 
 import { actionClient } from "@/lib/auth/safe-action";
+import { getOwnerPool } from "@/lib/db/owner-pool";
 import type { TenantId } from "@/lib/db/schema/_shared";
 import { withTenantTx } from "@/lib/db/with-tenant-tx";
 import { createBook } from "@/lib/domain/books/create-book";
@@ -29,7 +30,7 @@ import {
 } from "@/lib/domain/books/schemas";
 import { softDeleteBook } from "@/lib/domain/books/soft-delete-book";
 import { updateBook } from "@/lib/domain/books/update-book";
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 // ---------------------------------------------------------------------------
 // previewIsbn — ai:use_enrich permission (librarian/admin only — triggers external
@@ -70,6 +71,23 @@ export const createBookAction = actionClient
     });
 
     revalidateTag(`tenant:${ctx.tenantCtx.tenantId}:books`, "default");
+
+    try {
+      const pool = getOwnerPool();
+      const res = await pool.query<{ slug: string }>(
+        "SELECT slug FROM tenants WHERE id = $1 LIMIT 1",
+        [ctx.tenantCtx.tenantId],
+      );
+      const slug = res.rows[0]?.slug;
+      if (slug) {
+        revalidatePath(`/${slug}/catalog`);
+        revalidatePath(`/${slug}/catalog/${result.id}`);
+        revalidatePath("/sitemap.xml");
+      }
+    } catch (err) {
+      console.warn("[revalidate] Failed to revalidate public pages on create:", err);
+    }
+
     return result;
   });
 
@@ -92,6 +110,23 @@ export const updateBookAction = actionClient
     });
 
     revalidateTag(`tenant:${ctx.tenantCtx.tenantId}:books`, "default");
+
+    try {
+      const pool = getOwnerPool();
+      const res = await pool.query<{ slug: string }>(
+        "SELECT slug FROM tenants WHERE id = $1 LIMIT 1",
+        [ctx.tenantCtx.tenantId],
+      );
+      const slug = res.rows[0]?.slug;
+      if (slug) {
+        revalidatePath(`/${slug}/catalog`);
+        revalidatePath(`/${slug}/catalog/${result.id}`);
+        revalidatePath("/sitemap.xml");
+      }
+    } catch (err) {
+      console.warn("[revalidate] Failed to revalidate public pages on update:", err);
+    }
+
     return result;
   });
 
@@ -114,6 +149,23 @@ export const softDeleteBookAction = actionClient
     });
 
     revalidateTag(`tenant:${ctx.tenantCtx.tenantId}:books`, "default");
+
+    try {
+      const pool = getOwnerPool();
+      const res = await pool.query<{ slug: string }>(
+        "SELECT slug FROM tenants WHERE id = $1 LIMIT 1",
+        [ctx.tenantCtx.tenantId],
+      );
+      const slug = res.rows[0]?.slug;
+      if (slug) {
+        revalidatePath(`/${slug}/catalog`);
+        revalidatePath(`/${slug}/catalog/${parsedInput.id}`);
+        revalidatePath("/sitemap.xml");
+      }
+    } catch (err) {
+      console.warn("[revalidate] Failed to revalidate public pages on delete:", err);
+    }
+
     return { deleted: true };
   });
 
@@ -136,5 +188,22 @@ export const restoreBookAction = actionClient
     });
 
     revalidateTag(`tenant:${ctx.tenantCtx.tenantId}:books`, "default");
+
+    try {
+      const pool = getOwnerPool();
+      const res = await pool.query<{ slug: string }>(
+        "SELECT slug FROM tenants WHERE id = $1 LIMIT 1",
+        [ctx.tenantCtx.tenantId],
+      );
+      const slug = res.rows[0]?.slug;
+      if (slug) {
+        revalidatePath(`/${slug}/catalog`);
+        revalidatePath(`/${slug}/catalog/${parsedInput.id}`);
+        revalidatePath("/sitemap.xml");
+      }
+    } catch (err) {
+      console.warn("[revalidate] Failed to revalidate public pages on restore:", err);
+    }
+
     return { restored: true };
   });
