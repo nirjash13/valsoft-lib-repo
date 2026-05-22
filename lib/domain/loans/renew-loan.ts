@@ -9,13 +9,14 @@
  */
 
 import { writeAuditLog } from "@/lib/audit/audit-log";
+import { books } from "@/lib/db/schema/books";
 import { holds } from "@/lib/db/schema/holds";
 import { loans } from "@/lib/db/schema/loans";
 import type { LoanRow } from "@/lib/db/schema/loans";
 import { tenants } from "@/lib/db/schema/tenants";
 import type { TenantCtx, TxClient } from "@/lib/db/with-tenant-tx";
 import { OptimisticConcurrencyError } from "@/lib/domain/books/errors";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import {
   LoanAlreadyReturnedError,
   LoanNotFoundError,
@@ -75,11 +76,27 @@ export async function renewLoan(
     throw new RenewalLimitReachedError(input.loanId, maxRenewals);
   }
 
-  // 5. Hold conflict check.
+  // 5. Lock the book row — same serialization point used by borrowBook / placeHold.
+  // This prevents a concurrent placeHold from inserting a hold between our conflict
+  // check (step 6) and the UPDATE (step 7), which would allow renewal to succeed
+  // even though a member is now waiting (TOCTOU fix for H-3).
+  await tx.select({ id: books.id }).from(books).where(eq(books.id, loan.bookId)).for("update");
+
+  // 6. Hold conflict check (after acquiring the book lock).
+  // Exclude the borrower's own member_id: a member who holds both an active loan
+  // AND a hold on the same book should not be blocked from renewing by their own hold
+  // (M-2 fix). The partial unique index allows this edge case; defense-in-depth is
+  // the placeHold guard (not yet added), but renewal must not punish the borrower.
   const [blockingHold] = await tx
     .select({ id: holds.id })
     .from(holds)
-    .where(and(eq(holds.bookId, loan.bookId), inArray(holds.status, ["queued", "ready"])))
+    .where(
+      and(
+        eq(holds.bookId, loan.bookId),
+        inArray(holds.status, ["queued", "ready"]),
+        ne(holds.memberId, loan.memberId),
+      ),
+    )
     .limit(1);
 
   if (blockingHold) {

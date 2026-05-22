@@ -25,10 +25,10 @@ export function BookCard({ book }: BookCardProps) {
       href={`/books/${book.id}`}
       className={cn(
         "group flex flex-col rounded-xl overflow-hidden",
-        "bg-[hsl(var(--bg-surface))] border border-[hsl(var(--border-subtle))]",
+        "bg-surface border border-border-subtle",
         "elev-1 transition-standard transition-all",
-        "hover:border-[hsl(var(--border-default))] hover:elev-2",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--bg-canvas))]",
+        "hover:border-border-default hover:elev-2",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
       )}
     >
       {/* Cover — 3:4 aspect ratio */}
@@ -62,13 +62,13 @@ export function BookCard({ book }: BookCardProps) {
 
       {/* Metadata */}
       <div className="flex flex-col gap-1 p-3">
-        <h3 className="text-meta font-semibold text-[hsl(var(--text-primary))] line-clamp-2 leading-snug group-hover:text-[hsl(var(--accent))] transition-instant transition-colors">
+        <h3 className="text-meta font-semibold text-text-primary line-clamp-2 leading-snug group-hover:text-accent transition-instant transition-colors">
           {book.title}
         </h3>
-        <p className="text-[12px] text-[hsl(var(--text-secondary))] line-clamp-1">
-          {authorDisplay}
-        </p>
-        {book.year && <p className="text-[11px] text-[hsl(var(--text-tertiary))]">{book.year}</p>}
+        {/* REVIEW: text-[12px] — below text-meta(13px); text-caption adds uppercase which changes appearance */}
+        <p className="text-[12px] text-text-secondary line-clamp-1">{authorDisplay}</p>
+        {/* REVIEW: text-[11px] — below 12px floor per design brief; safe to remove if year display is dropped */}
+        {book.year && <p className="text-[11px] text-text-tertiary">{book.year}</p>}
       </div>
     </Link>
   );
@@ -79,14 +79,11 @@ export function BookCard({ book }: BookCardProps) {
  */
 export function BookCardSkeleton() {
   return (
-    <div className="flex flex-col rounded-xl overflow-hidden bg-[hsl(var(--bg-surface))] border border-[hsl(var(--border-subtle))] elev-1">
-      <div
-        className="w-full animate-pulse bg-[hsl(var(--bg-surface-2))]"
-        style={{ aspectRatio: "3/4" }}
-      />
+    <div className="flex flex-col rounded-xl overflow-hidden bg-surface border border-border-subtle elev-1">
+      <div className="w-full animate-pulse bg-surface-2" style={{ aspectRatio: "3/4" }} />
       <div className="flex flex-col gap-2 p-3">
-        <div className="h-3 w-3/4 rounded bg-[hsl(var(--bg-surface-2))] animate-pulse" />
-        <div className="h-3 w-1/2 rounded bg-[hsl(var(--bg-surface-2))] animate-pulse" />
+        <div className="h-3 w-3/4 rounded bg-surface-2 animate-pulse" />
+        <div className="h-3 w-1/2 rounded bg-surface-2 animate-pulse" />
       </div>
     </div>
   );

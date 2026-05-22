@@ -51,7 +51,7 @@ export function BooksSearch({ defaultValue = "" }: BooksSearchProps) {
     <form onSubmit={handleSubmit} aria-label="Search books">
       <div className="relative max-w-sm">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--text-tertiary))]"
+          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary"
           aria-hidden
         />
         <input
@@ -62,10 +62,10 @@ export function BooksSearch({ defaultValue = "" }: BooksSearchProps) {
           aria-label="Search books by title or ISBN"
           className={cn(
             "w-full h-9 rounded-md pl-9 pr-9 py-2 text-body",
-            "bg-[hsl(var(--bg-surface-2))] text-[hsl(var(--text-primary))]",
-            "border border-[hsl(var(--border-default))]",
-            "placeholder:text-[hsl(var(--text-tertiary))]",
-            "focus-visible:outline-none focus-visible:border-[hsl(var(--border-strong))] focus-visible:ring-1 focus-visible:ring-[hsl(var(--accent))]",
+            "bg-surface-2 text-text-primary",
+            "border border-border-default",
+            "placeholder:text-text-tertiary",
+            "focus-visible:outline-none focus-visible:border-border-strong focus-visible:ring-1 focus-visible:ring-accent",
             "transition-instant transition-colors",
             isPending && "opacity-70",
           )}
@@ -77,8 +77,8 @@ export function BooksSearch({ defaultValue = "" }: BooksSearchProps) {
             className={cn(
               "absolute right-2 top-1/2 -translate-y-1/2",
               "flex h-5 w-5 items-center justify-center rounded",
-              "text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))]",
+              "text-text-tertiary hover:text-text-primary",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
             )}
             aria-label="Clear search"
           >

@@ -7,8 +7,8 @@ import Link from "next/link";
 export default function BooksNotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <p className="text-h3 text-[hsl(var(--text-primary))] mb-2">Book not found</p>
-      <p className="text-body text-[hsl(var(--text-secondary))] mb-6">
+      <p className="text-h3 text-text-primary mb-2">Book not found</p>
+      <p className="text-body text-text-secondary mb-6">
         This book may have been deleted or the link is incorrect.
       </p>
       <Button asChild>

@@ -9,15 +9,15 @@ export default function BooksLoading() {
       {/* Header skeleton */}
       <div className="flex items-center justify-between mb-6">
         <div className="space-y-2">
-          <div className="h-8 w-32 rounded-md bg-[hsl(var(--bg-surface-2))] animate-pulse" />
-          <div className="h-4 w-20 rounded bg-[hsl(var(--bg-surface-2))] animate-pulse" />
+          <div className="h-8 w-32 rounded-md bg-surface-2 animate-pulse" />
+          <div className="h-4 w-20 rounded bg-surface-2 animate-pulse" />
         </div>
-        <div className="h-9 w-28 rounded-md bg-[hsl(var(--bg-surface-2))] animate-pulse" />
+        <div className="h-9 w-28 rounded-md bg-surface-2 animate-pulse" />
       </div>
 
       {/* Search skeleton */}
       <div className="mb-6">
-        <div className="h-9 w-72 rounded-md bg-[hsl(var(--bg-surface-2))] animate-pulse" />
+        <div className="h-9 w-72 rounded-md bg-surface-2 animate-pulse" />
       </div>
 
       {/* Grid skeleton */}

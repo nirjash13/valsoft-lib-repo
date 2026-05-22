@@ -30,3 +30,11 @@ export class HoldNotPlaceableError extends Error {
     );
   }
 }
+
+export class HoldOwnershipDeniedError extends Error {
+  override readonly name = "HoldOwnershipDeniedError";
+  readonly code = "HOLD_OWNERSHIP_DENIED" as const;
+  constructor(public readonly holdId: string) {
+    super(`You do not have permission to cancel hold ${holdId}`);
+  }
+}

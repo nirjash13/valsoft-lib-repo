@@ -4,6 +4,142 @@
 <!-- Format: ## YYYY-MM-DD — Short Title -->
 <!-- Each entry: what changed, files affected, decisions made. -->
 
+## 2026-05-22 — Spec 07: Notifications (transactional + lifecycle emails, AI-drafted batch)
+
+Closes the circulation loop with email: due-date reminders (T-2/T-0/T+1), hold-ready,
+welcome, and rejection emails — plus an AI-draft batch composer with mandatory librarian
+review. Engine: Resend + React Email. **Scheduling decision: hourly Vercel Cron, NOT Vercel
+Workflow DevKit** (user-confirmed — consistent with the existing expire-holds cron, demoable
+locally, idempotent via `outgoing_emails` dedup). NFR-07-02 workflow-durability is met
+differently: the cron is stateless + idempotent, so a mid-run restart re-runs cleanly.
+
+**Run 1A — schema (`drizzle/0010_notifications.sql`, applied to live DB):** two tenant-scoped
+tables, RLS ENABLE+FORCE + policy + tenant-first indexes — `email_batches` (a sent-batch
+record) and `outgoing_emails` (one row per send; `delivery_status` enum incl. `skipped_opt_out`
+/`skipped_subject_removed`; `resend_id` for webhook correlation; `loan_id` for reminder dedup).
+Column adds: `members.email_status` (ok|bouncing|complained), `members.lifecycle_emails_enabled`,
+`tenants.email_monthly_cap` (default 5000).
+
+**Run 1B — Resend + React Email:** `lib/notifications/email-client.ts` (`sendEmail` — real
+Resend when `RESEND_API_KEY` set, DEV-OUTBOX console fallback when absent, never throws on a
+missing key — mirrors the AI-gateway degrade pattern); React Email templates (`layout`,
+`due-reminder`, `hold-ready`, `welcome`, `rejection`, `batch-reminder`); pure helpers
+`interpolate` (mustache) + `unsubscribe-token` (HMAC-SHA256).
+
+**Run 1C — AI draft:** `lib/notifications/ai-draft.ts` `draftPatronEmail` via
+`generateObjectViaGateway` + `PatronEmailDraftSchema` (REQ-07-06); `assertAiBudget` pre-check;
+**NFR-07-05 — the LLM receives aggregates + book titles + brand voice ONLY, never per-recipient
+PII** (names interpolated at send time). `draft-validation.ts` flags missing `{{due_date}}` etc.
+
+**Run 2 — email domain:** transactional + lifecycle senders, `volume-cap`, `reminders`
+(3 date windows + `NOT EXISTS` dedup), post-commit `triggers` facade wired into
+member-approve/reject + loan-return actions (try/catch — a failed email never rolls back the
+mutation), `audience` preview, `send-batch` (chunks of 50).
+
+**Run 3 — routes + UI:** `app/api/cron/send-reminders` (hourly, CRON_SECRET bearer +
+kill-switch, mirrors expire-holds) + `vercel.json` cron entry; `app/api/webhooks/resend`
+(hand-rolled Svix HMAC verify, delivery-status updates, bounce/complaint suppression,
+503-on-missing-row race guard); public `app/unsubscribe` page (one-click, HMAC token);
+`app/(app)/notifications` compose-batch UI + Server Actions (`email:compose`/`email:send`
+CASL perms added) with live token-validation gating the Send button.
+
+**Critic cycle:** REQUEST_CHANGES (2 HIGH/5 MEDIUM) → bug-fixer → APPROVE. Key fix: every
+send path refactored so NO network `sendEmail` runs inside an open DB transaction
+(load→send→record as short txs) — a mid-batch failure can no longer roll back the audit
+rows of already-dispatched emails. Migration `0011_notifications_dedup` added a partial
+unique index `(tenant_id, loan_id, email_type) WHERE loan_id IS NOT NULL` (concurrency-safe
+reminder dedup) + `email_batches.updated_at`. 70/70 unit tests, typecheck + biome + build
+(25 routes) green.
+
+## 2026-05-22 — Spec 06: Reader's Advisor (conversational RAG chat with tool calls)
+
+Headline AI feature: a grounded chat assistant that recommends ONLY this tenant's catalog
+via tool calls, refuses off-catalog questions, and streams to two surfaces (⌘K + sidebar).
+
+**Run 1A — chat schema (`drizzle/0009_chat.sql` + `.down.sql`, applied to live DB):** four
+tenant-scoped tables, all RLS ENABLE+FORCE + policy + tenant-first composite index —
+`chat_threads` (partial UNIQUE on `(tenant,member,page_context)` WHERE `archived_at IS NULL`
+→ one active thread per member per page-context), `chat_messages` (FK→threads ON DELETE
+CASCADE), `chat_refusals` (off_catalog|policy|error), `ai_usage` (token + cost rows —
+groundwork for Spec 11 REQ-11-07). Schema files under `lib/db/schema/`.
+
+**Run 1B — AI streaming + tools:** `lib/ai/routing.ts` (`MODELS` table — swappable gateway
+slugs); `streamTextViaGateway` added to `lib/ai/gateway.ts` (telemetry on, gateway-only);
+`lib/ai/prompts/readers-advisor.v1.md` (versioned system prompt — grounding, refusal,
+`<book:UUID>` citation, empty-result fallback) + `load-prompt.ts` frontmatter parser;
+`scripts/lint-prompts.mjs` + `pnpm lint:prompts`. Tool catalog `lib/ai/tools/` — 4 tools
+(`search_catalog`, `get_book_detail`, `check_availability`, `place_hold`), each opens its
+OWN `withTenantTx` (a stream outlives any single tx); `place_hold` CASL-gated on
+`can('create','Hold')`, refuses gracefully.
+
+**Run 2 — chat domain + route handler:** `lib/domain/chat/*` (thread/message/refusal/usage
+persistence, pure `page-context` + `book-refs` + `refusal` helpers). `app/api/chat/stream/
+route.ts` (`runtime=nodejs`): auth→401, kill-switch flag→404 (REQ-06-10), `assertAiBudget`→
+402 (REQ-06-07), member resolution, get-or-create thread, `streamTextViaGateway` with the
+tool catalog, `onFinish` persists messages + `ai_usage` + extracts book refs, friendly 503
+on gateway failure (REQ-11-08).
+
+**Run 3 — UI + evals:** `app/(app)/chat/*` + `components/chat/*` (`useChat` via
+`@ai-sdk/react` 3.0.189 / `DefaultChatTransport`, streaming with `aria-live`, inline
+`<book:UUID>`→`BookCardInline`, refusal notice, 402 quota banner, WCAG 2.2 AA); `components/
+command-palette/*` (⌘K Radix overlay, 250 ms debounce, three options — Search / Ask Stack /
+Place hold — REQ-06-01, "Ask Stack" hidden when flag off); sidebar "Ask Stack" entry;
+`evals/readers-advisor.dataset.json` (25 dialogues 10/10/5 + 3 cross-tenant probes — CI
+runner is Spec 11).
+
+**Critic cycle:** REQUEST_CHANGES (3 HIGH, 1 MEDIUM) → bug-fixer → re-critic APPROVE.
+H1 friendly-503 was dead code (`streamText` v6 never throws for gateway 5xx) → moved to
+`toUIMessageStreamResponse({ onError })`. H2 `messages` was unvalidated server-side (`as
+any[]`) → `safeValidateUIMessages` + 422 on bad shape + server-side 1000-char soft-truncate
+(spec §9). H3 "0 tool calls ⇒ refusal" heuristic was unsound → `lib/domain/chat/refusal.ts`
+`isRefusalText` (phrase-anchored, shared by route + `message-bubble`). M4 silent
+`getOrCreateThread` `catch {}` → now logs. 63/63 unit tests, typecheck + biome +
+lint:prompts + build (21 routes) green.
+
+## 2026-05-22 — Spec 05: Search & Discovery (hybrid lexical + semantic + RRF)
+
+**Run A — backend (25 files, ~770 LOC):**
+
+- **Migration** — `drizzle/0008_search_discovery.sql` (+ `.down.sql`), hand-written, applied to live DB. Adds: `pg_trgm` + `vector` extensions; `books.tsv` weighted tsvector GENERATED column (A=title, B=authors, C=subjects, D=description); GIN index on `tsv`; trigram GIN indexes on title + authors; `book_embeddings` table (pgvector `vector(1536)`, HNSW cosine index, RLS FORCE, UNIQUE per `(tenant,book,model_version)` for rolling model cutover REQ-05-09); `search_zero_result_log` table (RLS FORCE).
+- **Migration immutability fixes (orchestrator-applied):** `to_tsvector('english',…)` is only STABLE (regconfig lookup), and `array_to_string` is STABLE — both illegal in a GENERATED column / index expression. Wrapped in IMMUTABLE SQL functions: `books_search_tsv(text,text[],text[],text)` for the `tsv` column and `immutable_array_to_string(text[],text)` for the authors trigram index. `lexical-search.ts` updated to call `immutable_array_to_string` in the `%` and `similarity()` clauses so the trigram index applies.
+- **Domain** — `lib/domain/search/{rrf,lexical-search,semantic-search,hybrid-search,books-like-this,compute-facets,log-zero-result,embed-book,schemas,errors}.ts`. RRF k=60; semantic cosine ≥ 0.30; lexical = `websearch_to_tsquery` primary + trigram fallback; soft-delete excluded query-level (REQ-05-04).
+- **AI** — `lib/ai/gateway.ts` gains `generateEmbedding` routed through the Vercel AI Gateway; `assertAiBudget` before every embed.
+- **Pipeline wiring** — `create-book.ts` / `update-book.ts` / `restore-book.ts` `// TODO (Spec 05)` comments replaced with live `embedBook` calls.
+- **API** — `app/api/search/route.ts` (`POST /api/search`).
+
+**Run B — UI (11 files, ~620 LOC):** `/search` RSC page (URL-driven state), `search-box` (250 ms debounce, 1-char guard, `useTransition`), `search-results` + cursor `load-more`, `facet-sidebar` (subject/availability/language/decade), `zero-results` state, "Books like this" rail on book detail, Search nav item.
+
+**Critic cycle:** REQUEST_CHANGES (3 HIGH, 4 MEDIUM) → bug-fixer → re-critic APPROVE. Fixes: H1 dead `availability` facet now applies an `EXISTS`/`NOT EXISTS` on `loans.returned_at IS NULL` in all 3 query paths; H2 `embedBook` failure no longer rolls back catalog writes (try/catch+swallow at the 3 callers); H3 zero-result log moved to its own committed `db.transaction` (tenant GUC re-bound); M1 cursor gains `book_id` tiebreaker; M2 facet count `COUNT(DISTINCT…)` removes LEFT JOIN fan-out; M3 Route Handler error mapping `instanceof` not `constructor.name`; M4 year-chip single-`router.replace`. 52/52 unit tests, typecheck + biome + build green.
+
+**Deferred (Spec 05 follow-ups):** `ts_headline` snippet highlighting; REQ-05-08 nearest-3 zero-result suggestions; integration tests (IT-05-*); eval set (`pnpm eval:search`, nDCG@5 ≥ 0.65 CI gate); public-catalog lexical-only mode (Spec 09); ⌘K (Spec 06); Workflow-based async re-embed backfill; `hybrid-search.ts` direct `db` import + stale `search-zero-result-log.ts` doc comment (LOW).
+
+## 2026-05-22 — Spec 04 Run B + Spec 03 Run C + F-2 sweep: combined chain
+
+**Spec 04 Run B — Member Management UI (16 files, ~1,460 LOC):** public self-signup (`app/signup/**` + `POST /api/members/signup`), librarian approval queue (`members/pending`), admin member list with status tabs, admin member edit (role + status + can_borrow), profile self-edit (`members/me`), `listMembers` domain query, `updateMemberAdminAction`, Members sidebar nav.
+
+**Spec 03 Run C — Vercel Cron for `expireStaleHolds` (5 files):** `lib/db/with-system-tenant-tx.ts` (system path — re-binds `app.tenant_id` per tenant via `set_config`, no session, no BYPASSRLS), `lib/notifications/workflows/expire-stale-holds.ts` multi-tenant loop, `app/api/cron/expire-holds/route.ts` (`GET`, bearer-gated, per-tenant try/catch), `vercel.json` hourly cron `0 * * * *`, `lib/flags.ts` kill switch.
+
+**F-2 design-token sweep (32 files + `components/books/isbn-banner.tsx`):** arbitrary `[hsl(var(--…))]` Tailwind classes → `@theme` utilities; F-9 extracted `IsbnBanner`; F-11 `aria-hidden` on visual required `*`. 9 alpha-modified tokens left `// REVIEW:` (need oklch/rgb @theme migration).
+
+**Critic cycle:** REQUEST_CHANGES (3 HIGH, 7 MEDIUM) → bug-fixer. Fixes: H1 `crypto.timingSafeEqual` for the cron bearer check (was CWE-208); H2 member-edit OCC token now uses the DB-written `updatedAt` not a synthesized `new Date()`; H3 last-`tenant_admin` invariant extended to status changes (not just role); M1 `flags.test.ts` env cleanup; M4 member-list "All" tab; M5 read-only status for pending/rejected; M6 `?slug=` signup fallback gated to non-production. M2 (`app.user_id='system'`) and M3 (kill-switch polarity) rejected with justification.
+
+**Smoke test / DB plumbing:** `DATABASE_URL` confirmed live (13/13 foundation checks). **Migrations 0006 (circulation) + 0007 (member-management) had never been applied** — both are hand-written; applied via `scripts/apply-migration.mjs`. New `scripts/seed-demo.mjs` + `pnpm db:seed:demo` + `pnpm db:seed` chain create the canonical demo tenant ("Stack Public Library", slug `stack-public`) with 8 books + 6 members (5 active + 1 pending). `seed-circulation.mjs` hardened to pick a tenant with ≥3 books + ≥3 active members (DB was full of leftover integration-test "Verify A/B" tenants). Seeded 2 loans (1 on-time, 1 overdue) + 1 queued hold. `pnpm build` green — 17 routes compile.
+
+## 2026-05-22 — Spec 03 Run C: Critic fixes (H-1/M-5, H-2, H-3, H-4, M-1, M-2, M-3)
+
+**Fixes applied per critic-opus review:**
+
+- **H-1 + M-5** — `lib/auth/permission.ts:165`: granted `hold:delete` to `member` role. `lib/domain/holds/cancel-hold.ts`: added ownership check (reads hold before update; throws `HoldOwnershipDeniedError` when `callerMemberId` is set and doesn't match). `lib/domain/holds/errors.ts`: added `HoldOwnershipDeniedError` with `code: "HOLD_OWNERSHIP_DENIED"`. `lib/auth/safe-action.ts`: maps `HoldOwnershipDeniedError` → 403 `HOLD_OWNERSHIP_DENIED`. `app/(app)/holds/actions.ts`: `cancelHoldAction` resolves caller's member record and passes `callerMemberId` for non-staff callers. `app/(app)/holds/page.tsx:33`: `canReadAllHolds` now uses `ability.can("checkin","Loan")` as the staff discriminator (librarians have checkin; members don't); `canCancelHold` remains `ability.can("delete","Hold")` which is now true for members.
+- **H-2** — `lib/db/schema/members.ts`: restored `auth0_user_id` (as `text`, nullable), `deleted_at` (timestamptz), changed `display_name`/`email` from `varchar` back to `text` — matching `0000_init.sql`. Running `drizzle-kit generate` should emit zero destructive diff.
+- **H-3** — `lib/domain/loans/renew-loan.ts`: added `SELECT … FOR UPDATE` on the book row (step 5) before the hold-conflict check (step 6), serializing against concurrent `placeHold` calls.
+- **H-4** — `lib/domain/holds/place-hold.ts`: added `SELECT … FOR UPDATE` on the book row as the first step, before `hasActiveLoan`, coordinating with `borrowBook` and `renewLoan`.
+- **M-1** — `drizzle/0006_circulation.sql`: added safety comment block documenting the `safety:reviewed` PR label requirement for the `NOT NULL DEFAULT` backfill.
+- **M-2** — `lib/domain/loans/renew-loan.ts`: hold-conflict query now adds `ne(holds.memberId, loan.memberId)` to exclude the borrower's own hold from blocking renewal.
+- **M-3** — `scripts/seed-circulation.mjs:116`: changed audit action from `'loan.checked_out'` to `'loan.borrowed'` to match the domain function vocabulary.
+- **Test** — `tests/unit/domain/holds/cancel-hold.test.ts`: one regression test for H-1/M-5 (member cancelling another member's hold throws `HoldOwnershipDeniedError`).
+
+**Note (M-1):** `drizzle/0006_circulation.sql` requires the `safety:reviewed` GitHub PR label before merge. CI must be configured to block merge without this label (per `.claude/rules/migrations.md` §Per-PR safety).
+
 ## 2026-05-21 — Spec 03 Run A: Circulation backend (loans, holds, FIFO promotion, FOR UPDATE concurrency)
 
 **What shipped (backend only, no UI — Run B will build the loans/holds pages):**

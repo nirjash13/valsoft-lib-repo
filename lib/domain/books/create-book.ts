@@ -1,16 +1,21 @@
 /**
- * createBook domain function — inserts one books row and one audit_log row
- * atomically inside the caller's transaction (REQ-02-03).
+ * createBook domain function — inserts one books row, one audit_log row,
+ * and triggers embedding indexing, all atomically inside the caller's transaction
+ * (REQ-02-03, REQ-05-03).
  *
- * Emitting `book.created` for the search-indexer is deferred to Spec 05.
- * TODO (Spec 05): emit a `book.created` domain event after the insert so the
- * embedding + tsvector worker can index the new record.
+ * Embedding: called synchronously after INSERT. Adds ~200ms when AI_SEARCH_ENABLED=true
+ * (budget check + API call). Acceptable for interactive book creation. A background
+ * Workflow for batch backfill is a Spec 05 follow-up (flagged IT-05-2).
+ *
+ * Note: the tsv GENERATED column is maintained by Postgres automatically —
+ * no application-layer step is needed for full-text indexing.
  */
 
 import { writeAuditLog } from "@/lib/audit/audit-log";
 import type { BookId } from "@/lib/db/schema/_shared";
 import { books } from "@/lib/db/schema/books";
 import type { TenantCtx, TxClient } from "@/lib/db/with-tenant-tx";
+import { embedBook } from "@/lib/domain/search/embed-book";
 import type { CreateBookInput } from "./schemas";
 
 export interface CreateBookResult {
@@ -58,7 +63,18 @@ export async function createBook(
     afterJson: input,
   });
 
-  // TODO (Spec 05): emit book.created domain event for search indexer.
+  // Spec 05 REQ-05-03: embed the new book for semantic search.
+  // Non-fatal: a transient AI Gateway outage must not block book creation.
+  // The book is still lexically searchable. A backfill Workflow (REQ-05-03 async
+  // indexing) is the follow-up path for books that land here without an embedding.
+  try {
+    await embedBook(tx, {
+      tenantId: ctx.tenantId as import("@/lib/db/schema/_shared").TenantId,
+      bookId: row.id as BookId,
+    });
+  } catch (err) {
+    console.warn(`[createBook] embedding skipped — tenant=${ctx.tenantId} book=${row.id}`, err);
+  }
 
   return { id: row.id as BookId };
 }

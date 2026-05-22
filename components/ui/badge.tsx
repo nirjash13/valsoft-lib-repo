@@ -7,16 +7,14 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default:
-          "bg-[hsl(var(--accent)/0.15)] text-[hsl(var(--accent))] border border-[hsl(var(--accent)/0.3)]",
+        // REVIEW: opacity-alpha variants below need oklch/rgb @theme tokens to use Tailwind opacity modifiers
+        default: "bg-[hsl(var(--accent)/0.15)] text-accent border border-[hsl(var(--accent)/0.3)]",
         success:
-          "bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))] border border-[hsl(var(--success)/0.3)]",
+          "bg-[hsl(var(--success)/0.12)] text-success border border-[hsl(var(--success)/0.3)]",
         warning:
-          "bg-[hsl(var(--warning)/0.12)] text-[hsl(var(--warning))] border border-[hsl(var(--warning)/0.3)]",
-        danger:
-          "bg-[hsl(var(--danger)/0.12)] text-[hsl(var(--danger))] border border-[hsl(var(--danger)/0.3)]",
-        secondary:
-          "bg-[hsl(var(--bg-surface-2))] text-[hsl(var(--text-secondary))] border border-[hsl(var(--border-subtle))]",
+          "bg-[hsl(var(--warning)/0.12)] text-warning border border-[hsl(var(--warning)/0.3)]",
+        danger: "bg-[hsl(var(--danger)/0.12)] text-danger border border-[hsl(var(--danger)/0.3)]",
+        secondary: "bg-surface-2 text-text-secondary border border-border-subtle",
       },
     },
     defaultVariants: {

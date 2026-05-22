@@ -4,7 +4,8 @@
  * After marking the loan returned, calls promoteNextHold so the head of the
  * hold queue (if any) gets notified immediately.
  *
- * TODO (Spec 07): emit('loan.returned', { loanId, tenantId }) after commit.
+ * Due-date reminders are cron-driven (hourly, lib/notifications/reminders.ts)
+ * — no event emission needed for loan.returned.
  */
 
 import { writeAuditLog } from "@/lib/audit/audit-log";
@@ -17,6 +18,8 @@ import { LoanAlreadyReturnedError, LoanNotFoundError } from "./errors";
 
 export interface ReturnBookResult {
   loan: LoanRow;
+  /** The hold ID that was promoted (if any), for post-commit email trigger. */
+  promotedHoldId: string | null;
 }
 
 /**
@@ -60,9 +63,9 @@ export async function returnBook(
   });
 
   // Promote the next queued hold for this book (REQ-03-03).
-  await promoteNextHold(tx, ctx, updated.bookId);
+  const { holdId: promotedHoldId } = await promoteNextHold(tx, ctx, updated.bookId);
 
-  // TODO (Spec 07): emit('loan.returned', { loanId: input.loanId, tenantId: ctx.tenantId })
+  // Due-date reminders are cron-driven — no event needed for loan.returned.
 
-  return { loan: updated };
+  return { loan: updated, promotedHoldId };
 }

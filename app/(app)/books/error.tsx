@@ -20,8 +20,8 @@ export default function BooksError({ error, reset }: BooksErrorProps) {
 
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <p className="text-h3 text-[hsl(var(--text-primary))] mb-2">Something went wrong</p>
-      <p className="text-body text-[hsl(var(--text-secondary))] mb-6 max-w-sm">
+      <p className="text-h3 text-text-primary mb-2">Something went wrong</p>
+      <p className="text-body text-text-secondary mb-6 max-w-sm">
         The books list could not be loaded. This is likely a temporary issue.
       </p>
       <div className="flex items-center gap-3">

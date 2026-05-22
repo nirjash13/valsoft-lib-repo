@@ -41,32 +41,32 @@ export function TrashTable({ books }: TrashTableProps) {
   }
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--border-subtle))] overflow-hidden">
+    <div className="rounded-xl border border-border-subtle overflow-hidden">
       <table className="w-full border-collapse" aria-label="Deleted books">
-        <thead className="bg-[hsl(var(--bg-surface-2))] border-b border-[hsl(var(--border-subtle))]">
+        <thead className="bg-surface-2 border-b border-border-subtle">
           <tr>
             <th
               scope="col"
-              className="text-caption text-[hsl(var(--text-tertiary))] px-4 py-2.5 text-left font-medium"
+              className="text-caption text-text-tertiary px-4 py-2.5 text-left font-medium"
             >
               Title / Author
             </th>
             <th
               scope="col"
-              className="text-caption text-[hsl(var(--text-tertiary))] px-4 py-2.5 text-right font-medium w-36"
+              className="text-caption text-text-tertiary px-4 py-2.5 text-right font-medium w-36"
             >
               Deleted
             </th>
             <th
               scope="col"
-              className="text-caption text-[hsl(var(--text-tertiary))] px-4 py-2.5 text-right font-medium w-36"
+              className="text-caption text-text-tertiary px-4 py-2.5 text-right font-medium w-36"
             >
               Retention
             </th>
             <th scope="col" className="w-24 px-4 py-2.5" aria-label="Actions" />
           </tr>
         </thead>
-        <tbody className="divide-y divide-[hsl(var(--border-subtle))]">
+        <tbody className="divide-y divide-border-subtle">
           {books.map((book) => {
             const deletedAt = book.deletedAt ? new Date(book.deletedAt) : null;
             const retentionEnd = deletedAt
@@ -80,21 +80,22 @@ export function TrashTable({ books }: TrashTableProps) {
             return (
               <tr
                 key={book.id}
-                className="bg-[hsl(var(--bg-surface))] hover:bg-[hsl(var(--bg-surface-2))] transition-instant transition-colors"
+                className="bg-surface hover:bg-surface-2 transition-instant transition-colors"
               >
                 <td className="px-4 py-3 min-w-0">
                   <Link
                     href={`/books/${book.id}`}
-                    className="text-meta font-medium text-[hsl(var(--text-primary))] hover:text-[hsl(var(--accent))] transition-instant truncate block"
+                    className="text-meta font-medium text-text-primary hover:text-accent transition-instant truncate block"
                   >
                     {book.title}
                   </Link>
-                  <p className="text-[12px] text-[hsl(var(--text-secondary))] truncate">
+                  {/* REVIEW: text-[12px] — below text-meta(13px); text-caption adds uppercase which changes appearance */}
+                  <p className="text-[12px] text-text-secondary truncate">
                     {book.authors.join(", ")}
                   </p>
                 </td>
 
-                <td className="px-4 py-3 text-meta text-[hsl(var(--text-secondary))] text-right">
+                <td className="px-4 py-3 text-meta text-text-secondary text-right">
                   {deletedAt ? deletedAt.toLocaleDateString("en-US", { dateStyle: "medium" }) : "—"}
                 </td>
 

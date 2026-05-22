@@ -41,8 +41,8 @@ export default async function EditBookPage({ params }: EditBookPageProps) {
 
   return (
     <div className="max-w-[720px] mx-auto">
-      <h1 className="text-h1 text-[hsl(var(--text-primary))] mb-1">Edit Book</h1>
-      <p className="text-body text-[hsl(var(--text-secondary))] mb-8 line-clamp-1">{book.title}</p>
+      <h1 className="text-h1 text-text-primary mb-1">Edit Book</h1>
+      <p className="text-body text-text-secondary mb-8 line-clamp-1">{book.title}</p>
       <EditBookForm
         book={{
           id: book.id,

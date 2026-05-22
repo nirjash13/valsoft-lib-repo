@@ -1,6 +1,8 @@
 "use client";
 
 import { createBookAction, previewIsbnAction } from "@/app/(app)/books/actions";
+import { IsbnBanner } from "@/components/books/isbn-banner";
+import type { PreviewState } from "@/components/books/isbn-banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,22 +11,14 @@ import type { PreviewResult } from "@/lib/domain/books/preview-isbn";
 import { type CreateBookInput, CreateBookSchema } from "@/lib/domain/books/schemas";
 import type { BookRecord } from "@/lib/domain/books/schemas";
 import { coverGradient } from "@/lib/utils/cover-color";
-import { selectIsbnBanner } from "@/lib/utils/isbn-banner";
 import type { ProblemDetails } from "@/lib/utils/problem";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, CheckCircle2, Info, Search } from "lucide-react";
+import { Info, Search } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-
-type PreviewState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "found"; data: Partial<BookRecord>; sourceDiffs: Record<string, string> }
-  | { kind: "not_found" }
-  | { kind: "error"; message: string };
 
 /**
  * NewBookForm — ISBN preview + manual entry form.
@@ -147,11 +141,11 @@ export function NewBookForm() {
     <div className="flex flex-col gap-8">
       {/* ISBN lookup */}
       <section
-        className="rounded-xl border border-[hsl(var(--border-subtle))] p-5 bg-[hsl(var(--bg-surface))]"
+        className="rounded-xl border border-border-subtle p-5 bg-surface"
         aria-label="ISBN lookup"
       >
-        <h2 className="text-h3 text-[hsl(var(--text-primary))] mb-1">ISBN Lookup</h2>
-        <p className="text-meta text-[hsl(var(--text-secondary))] mb-4">
+        <h2 className="text-h3 text-text-primary mb-1">ISBN Lookup</h2>
+        <p className="text-meta text-text-secondary mb-4">
           Paste an ISBN-10 or ISBN-13 to auto-fill the form.
         </p>
 
@@ -177,58 +171,7 @@ export function NewBookForm() {
         </form>
 
         {/* Banner: ISBN state feedback */}
-        {(() => {
-          const banner = selectIsbnBanner(preview);
-          if (banner === "not_found") {
-            return (
-              <div
-                className="mt-4 flex items-start gap-2 rounded-lg px-4 py-3 text-body border"
-                style={{
-                  background: "hsl(var(--warning)/0.08)",
-                  borderColor: "hsl(var(--warning)/0.3)",
-                  color: "hsl(var(--warning))",
-                }}
-                aria-live="polite"
-              >
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
-                <span>We couldn&rsquo;t find this ISBN — please fill the fields and save.</span>
-              </div>
-            );
-          }
-          if (banner === "error") {
-            return (
-              <div
-                className="mt-4 flex items-start gap-2 rounded-lg px-4 py-3 text-body border"
-                style={{
-                  background: "hsl(var(--danger)/0.08)",
-                  borderColor: "hsl(var(--danger)/0.3)",
-                  color: "hsl(var(--danger))",
-                }}
-                role="alert"
-              >
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
-                <span>{preview.kind === "error" ? preview.message : "An error occurred."}</span>
-              </div>
-            );
-          }
-          if (preview.kind === "found") {
-            return (
-              <div
-                className="mt-4 flex items-start gap-2 rounded-lg px-4 py-3 text-body border"
-                style={{
-                  background: "hsl(var(--success)/0.08)",
-                  borderColor: "hsl(var(--success)/0.3)",
-                  color: "hsl(var(--success))",
-                }}
-                aria-live="polite"
-              >
-                <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
-                <span>Preview loaded — review and edit below, then save.</span>
-              </div>
-            );
-          }
-          return null;
-        })()}
+        <IsbnBanner state={preview} />
 
         {/* Source diffs — show when sources disagree (BDD REQ-02-01 sources disagree) */}
         {preview.kind === "found" &&
@@ -261,7 +204,7 @@ export function NewBookForm() {
 
         {/* Mini preview card */}
         {previewData?.title && (
-          <div className="mt-4 flex gap-4 items-center p-4 rounded-lg bg-[hsl(var(--bg-surface-2))] border border-[hsl(var(--border-subtle))]">
+          <div className="mt-4 flex gap-4 items-center p-4 rounded-lg bg-surface-2 border border-border-subtle">
             <div
               className="relative shrink-0 rounded-md overflow-hidden"
               style={{ width: 56, height: 76 }}
@@ -283,14 +226,15 @@ export function NewBookForm() {
               )}
             </div>
             <div className="min-w-0">
-              <p className="text-meta font-semibold text-[hsl(var(--text-primary))] truncate">
+              <p className="text-meta font-semibold text-text-primary truncate">
                 {previewData.title}
               </p>
-              <p className="text-[12px] text-[hsl(var(--text-secondary))] truncate">
+              {/* REVIEW: text-[12px] — below text-meta(13px); text-caption adds uppercase which changes appearance */}
+              <p className="text-[12px] text-text-secondary truncate">
                 {previewData.authors?.join(", ")}
               </p>
               {previewData.year && (
-                <p className="text-caption text-[hsl(var(--text-tertiary))]">{previewData.year}</p>
+                <p className="text-caption text-text-tertiary">{previewData.year}</p>
               )}
             </div>
           </div>
@@ -300,17 +244,17 @@ export function NewBookForm() {
       {/* Book form */}
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="rounded-xl border border-[hsl(var(--border-subtle))] p-5 bg-[hsl(var(--bg-surface))] space-y-5"
+        className="rounded-xl border border-border-subtle p-5 bg-surface space-y-5"
         aria-label="Book details form"
         noValidate
       >
-        <h2 className="text-h3 text-[hsl(var(--text-primary))]">Book Details</h2>
+        <h2 className="text-h3 text-text-primary">Book Details</h2>
 
         {/* Title */}
         <div className="space-y-1.5">
           <Label htmlFor="title">
             Title{" "}
-            <span className="text-[hsl(var(--danger))]" aria-label="required">
+            <span className="text-danger" aria-hidden="true">
               *
             </span>
           </Label>
@@ -323,7 +267,7 @@ export function NewBookForm() {
             {...register("title")}
           />
           {errors.title && (
-            <p id="title-error" className="text-meta text-[hsl(var(--danger))]" role="alert">
+            <p id="title-error" className="text-meta text-danger" role="alert">
               {errors.title.message}
             </p>
           )}
@@ -333,7 +277,7 @@ export function NewBookForm() {
         <div className="space-y-1.5">
           <Label htmlFor="authors">
             Author(s){" "}
-            <span className="text-[hsl(var(--danger))]" aria-label="required">
+            <span className="text-danger" aria-hidden="true">
               *
             </span>
           </Label>
@@ -353,11 +297,11 @@ export function NewBookForm() {
               setValue("authors", authors.length > 0 ? authors : [], { shouldValidate: true });
             }}
           />
-          <p id="authors-hint" className="text-meta text-[hsl(var(--text-tertiary))]">
+          <p id="authors-hint" className="text-meta text-text-tertiary">
             Separate multiple authors with commas
           </p>
           {errors.authors && (
-            <p id="authors-error" className="text-meta text-[hsl(var(--danger))]" role="alert">
+            <p id="authors-error" className="text-meta text-danger" role="alert">
               {Array.isArray(errors.authors)
                 ? errors.authors
                     .map((e) => e?.message)
@@ -379,7 +323,7 @@ export function NewBookForm() {
             {...register("isbn13")}
           />
           {errors.isbn13 && (
-            <p id="isbn13-error" className="text-meta text-[hsl(var(--danger))]" role="alert">
+            <p id="isbn13-error" className="text-meta text-danger" role="alert">
               {errors.isbn13.message}
             </p>
           )}
@@ -398,7 +342,7 @@ export function NewBookForm() {
               {...register("year", { valueAsNumber: true })}
             />
             {errors.year && (
-              <p id="year-error" className="text-meta text-[hsl(var(--danger))]" role="alert">
+              <p id="year-error" className="text-meta text-danger" role="alert">
                 {errors.year.message}
               </p>
             )}
@@ -414,7 +358,7 @@ export function NewBookForm() {
               {...register("pageCount", { valueAsNumber: true })}
             />
             {errors.pageCount && (
-              <p id="page-count-error" className="text-meta text-[hsl(var(--danger))]" role="alert">
+              <p id="page-count-error" className="text-meta text-danger" role="alert">
                 {errors.pageCount.message}
               </p>
             )}
@@ -437,11 +381,11 @@ export function NewBookForm() {
               aria-invalid={errors.language ? "true" : "false"}
               {...register("language")}
             />
-            <p id="language-hint" className="text-meta text-[hsl(var(--text-tertiary))]">
+            <p id="language-hint" className="text-meta text-text-tertiary">
               ISO 639-1 code
             </p>
             {errors.language && (
-              <p id="language-error" className="text-meta text-[hsl(var(--danger))]" role="alert">
+              <p id="language-error" className="text-meta text-danger" role="alert">
                 {errors.language.message}
               </p>
             )}
@@ -460,7 +404,7 @@ export function NewBookForm() {
             {...register("description")}
           />
           {errors.description && (
-            <p id="description-error" className="text-meta text-[hsl(var(--danger))]" role="alert">
+            <p id="description-error" className="text-meta text-danger" role="alert">
               {errors.description.message}
             </p>
           )}

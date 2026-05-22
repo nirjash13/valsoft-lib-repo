@@ -41,8 +41,8 @@ export default async function BooksPage({ searchParams }: BooksPageProps) {
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-h1 text-[hsl(var(--text-primary))]">Books</h1>
-          <p className="text-meta text-[hsl(var(--text-secondary))] mt-1">
+          <h1 className="text-h1 text-text-primary">Books</h1>
+          <p className="text-meta text-text-secondary mt-1">
             {books.length} book{books.length !== 1 ? "s" : ""}
             {query ? ` matching "${query}"` : ""}
           </p>
@@ -109,10 +109,10 @@ function EmptyState({ query, canCreate }: { query: string; canCreate: boolean })
       >
         📚
       </div>
-      <p className="text-h3 text-[hsl(var(--text-primary))] mb-2">
+      <p className="text-h3 text-text-primary mb-2">
         {query ? `No books matching "${query}"` : "No books yet."}
       </p>
-      <p className="text-body text-[hsl(var(--text-secondary))] mb-6">
+      <p className="text-body text-text-secondary mb-6">
         {query
           ? "Try a different search term, or clear the filter."
           : "Scan an ISBN or fill the form to get started."}

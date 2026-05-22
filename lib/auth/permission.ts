@@ -30,7 +30,8 @@ export type AppSubject =
   | "AuditLog"
   | "Hold"
   | "Report"
-  | "AI";
+  | "AI"
+  | "Email";
 
 export type AppAction =
   | "read"
@@ -45,7 +46,9 @@ export type AppAction =
   | "provision"
   | "use_chat"
   | "use_enrich"
-  | "view";
+  | "view"
+  | "compose"
+  | "send";
 
 export const KNOWN_SUBJECTS: ReadonlySet<string> = new Set<AppSubject>([
   "Book",
@@ -56,6 +59,7 @@ export const KNOWN_SUBJECTS: ReadonlySet<string> = new Set<AppSubject>([
   "Hold",
   "Report",
   "AI",
+  "Email",
 ]);
 
 export const KNOWN_ACTIONS: ReadonlySet<string> = new Set<AppAction>([
@@ -72,6 +76,8 @@ export const KNOWN_ACTIONS: ReadonlySet<string> = new Set<AppAction>([
   "use_chat",
   "use_enrich",
   "view",
+  "compose",
+  "send",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -140,6 +146,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly string[]>> = {
     "report:view",
     "ai:use_chat",
     "ai:use_enrich",
+    "email:compose",
+    "email:send",
   ],
   librarian: [
     "book:create",
@@ -161,8 +169,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly string[]>> = {
     "auditlog:read",
     "ai:use_chat",
     "ai:use_enrich",
+    "email:compose",
+    "email:send",
   ],
-  member: ["book:read", "loan:read", "hold:create", "hold:read", "ai:use_chat"],
+  member: ["book:read", "loan:read", "hold:create", "hold:read", "hold:delete", "ai:use_chat"],
   guest: ["book:read", "ai:use_chat"],
 };
 

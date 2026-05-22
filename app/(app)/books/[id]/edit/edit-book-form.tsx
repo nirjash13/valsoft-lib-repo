@@ -98,7 +98,7 @@ export function EditBookForm({ book }: EditBookFormProps) {
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="rounded-xl border border-[hsl(var(--border-subtle))] p-5 bg-[hsl(var(--bg-surface))] space-y-5"
+      className="rounded-xl border border-border-subtle p-5 bg-surface space-y-5"
       aria-label="Edit book form"
       noValidate
     >
@@ -132,7 +132,7 @@ export function EditBookForm({ book }: EditBookFormProps) {
       <div className="space-y-1.5">
         <Label htmlFor="title">
           Title{" "}
-          <span className="text-[hsl(var(--danger))]" aria-label="required">
+          <span className="text-danger" aria-hidden="true">
             *
           </span>
         </Label>
@@ -144,7 +144,7 @@ export function EditBookForm({ book }: EditBookFormProps) {
           {...register("title")}
         />
         {errors.title && (
-          <p id="title-error" className="text-meta text-[hsl(var(--danger))]" role="alert">
+          <p id="title-error" className="text-meta text-danger" role="alert">
             {errors.title.message}
           </p>
         )}
@@ -154,7 +154,7 @@ export function EditBookForm({ book }: EditBookFormProps) {
       <div className="space-y-1.5">
         <Label htmlFor="authors">
           Author(s){" "}
-          <span className="text-[hsl(var(--danger))]" aria-label="required">
+          <span className="text-danger" aria-hidden="true">
             *
           </span>
         </Label>
@@ -172,7 +172,7 @@ export function EditBookForm({ book }: EditBookFormProps) {
           }}
         />
         {errors.authors && (
-          <p className="text-meta text-[hsl(var(--danger))]" role="alert">
+          <p className="text-meta text-danger" role="alert">
             {Array.isArray(errors.authors)
               ? errors.authors
                   .map((e) => e?.message)
@@ -188,7 +188,7 @@ export function EditBookForm({ book }: EditBookFormProps) {
         <Label htmlFor="isbn13">ISBN-13</Label>
         <Input id="isbn13" placeholder="13 digits" {...register("isbn13")} />
         {errors.isbn13 && (
-          <p className="text-meta text-[hsl(var(--danger))]" role="alert">
+          <p className="text-meta text-danger" role="alert">
             {errors.isbn13.message}
           </p>
         )}
@@ -206,7 +206,7 @@ export function EditBookForm({ book }: EditBookFormProps) {
             {...register("year", { valueAsNumber: true })}
           />
           {errors.year && (
-            <p id="year-error" className="text-meta text-[hsl(var(--danger))]" role="alert">
+            <p id="year-error" className="text-meta text-danger" role="alert">
               {errors.year.message}
             </p>
           )}
@@ -227,7 +227,7 @@ export function EditBookForm({ book }: EditBookFormProps) {
           <Label htmlFor="language">Language</Label>
           <Input id="language" maxLength={2} placeholder="en" {...register("language")} />
           {errors.language && (
-            <p className="text-meta text-[hsl(var(--danger))]" role="alert">
+            <p className="text-meta text-danger" role="alert">
               {errors.language.message}
             </p>
           )}
@@ -239,7 +239,7 @@ export function EditBookForm({ book }: EditBookFormProps) {
         <Label htmlFor="description">Description</Label>
         <Textarea id="description" rows={4} {...register("description")} />
         {errors.description && (
-          <p className="text-meta text-[hsl(var(--danger))]" role="alert">
+          <p className="text-meta text-danger" role="alert">
             {errors.description.message}
           </p>
         )}

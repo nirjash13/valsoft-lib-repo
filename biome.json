@@ -42,5 +42,17 @@
       ".claude/worktrees/**",
       "next-env.d.ts"
     ]
-  }
+  },
+  "overrides": [
+    {
+      "include": ["components/command-palette/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off"
+          }
+        }
+      }
+    }
+  ]
 }

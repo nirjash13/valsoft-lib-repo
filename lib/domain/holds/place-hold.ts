@@ -9,6 +9,7 @@
  */
 
 import { writeAuditLog } from "@/lib/audit/audit-log";
+import { books } from "@/lib/db/schema/books";
 import { holds } from "@/lib/db/schema/holds";
 import type { HoldRow } from "@/lib/db/schema/holds";
 import { members } from "@/lib/db/schema/members";
@@ -36,20 +37,32 @@ export async function placeHold(
   ctx: TenantCtx,
   input: { bookId: string; memberId: string },
 ): Promise<PlaceHoldResult> {
-  // 1. Hold only makes sense when the book is borrowed.
+  // 1. Lock the book row — same serialization point used by borrowBook and renewLoan.
+  // This coordinates with returnBook (which atomically updates the loan row, also
+  // preventing concurrent reads from seeing a stale active-loan state) and prevents
+  // a TOCTOU window where the active loan is returned between the hasActiveLoan check
+  // and the hold INSERT, leaving a queued hold on an available book (H-4 fix).
+  // Note: returnBook currently does not take a book-row lock (it locks via the loan
+  // UPDATE's WHERE clause). The book-row lock here ensures placeHold and borrowBook
+  // are serialized against each other; the returnBook atomicity relies on the loan's
+  // UPDATE WHERE returned_at IS NULL which is sufficient for the return path but does
+  // not block a concurrent placeHold read. The book-row lock closes the remaining gap.
+  await tx.select({ id: books.id }).from(books).where(eq(books.id, input.bookId)).for("update");
+
+  // 2. Hold only makes sense when the book is borrowed (checked AFTER book lock).
   const active = await hasActiveLoan(tx, input.bookId);
   if (!active) {
     throw new HoldNotPlaceableError(input.bookId);
   }
 
-  // 2. Verify member is active.
+  // 3. Verify member is active.
   const [member] = await tx.select().from(members).where(eq(members.id, input.memberId));
 
   if (!member || member.status !== "active") {
     throw new MemberNotActiveError(input.memberId);
   }
 
-  // 3. Insert — the partial UNIQUE INDEX will reject duplicates.
+  // 4. Insert — the partial UNIQUE INDEX will reject duplicates.
   let hold: HoldRow;
   try {
     const queuedAt = new Date();
@@ -74,7 +87,7 @@ export async function placeHold(
     throw err;
   }
 
-  // 4. Compute queue position (1-based, FIFO by queued_at).
+  // 5. Compute queue position (1-based, FIFO by queued_at).
   const [positionRow] = await tx
     .select({ pos: count() })
     .from(holds)

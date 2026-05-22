@@ -5,13 +5,15 @@
  * daily purge worker (Spec 08) anonymizes the record — at that point
  * restoration is blocked.
  *
- * Emitting `book.updated` for the search-indexer is deferred to Spec 05.
- * TODO (Spec 05): emit a `book.updated` domain event after restore.
+ * Spec 05 REQ-05-03: re-embeds the book after restoration in case the embedding
+ * row was deleted or is stale. Skipped silently when AI_SEARCH_ENABLED is false.
  */
 
 import { writeAuditLog } from "@/lib/audit/audit-log";
+import type { BookId } from "@/lib/db/schema/_shared";
 import { books } from "@/lib/db/schema/books";
 import type { TenantCtx, TxClient } from "@/lib/db/with-tenant-tx";
+import { embedBook } from "@/lib/domain/search/embed-book";
 import { and, eq, gte, isNotNull } from "drizzle-orm";
 import { BookNotFoundError } from "./errors";
 
@@ -44,5 +46,15 @@ export async function restoreBook(tx: TxClient, ctx: TenantCtx, bookId: string):
     subjectId: bookId,
   });
 
-  // TODO (Spec 05): emit book.updated domain event for search indexer.
+  // Spec 05 REQ-05-03: re-embed the restored book.
+  // Non-fatal: a transient AI Gateway outage must not block book restoration.
+  // A backfill Workflow (REQ-05-03 async indexing) is the follow-up path.
+  try {
+    await embedBook(tx, {
+      tenantId: ctx.tenantId as import("@/lib/db/schema/_shared").TenantId,
+      bookId: bookId as BookId,
+    });
+  } catch (err) {
+    console.warn(`[restoreBook] embedding skipped — tenant=${ctx.tenantId} book=${bookId}`, err);
+  }
 }

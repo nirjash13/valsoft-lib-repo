@@ -31,6 +31,7 @@ import {
   HoldAlreadyExistsError,
   HoldNotFoundError,
   HoldNotPlaceableError,
+  HoldOwnershipDeniedError,
 } from "@/lib/domain/holds/errors";
 import {
   BookAlreadyBorrowedError,
@@ -41,6 +42,25 @@ import {
   RenewalBlockedByHoldError,
   RenewalLimitReachedError,
 } from "@/lib/domain/loans/errors";
+import {
+  LastTenantAdminError,
+  MemberAlreadyApprovedError,
+  MemberAlreadyExistsError,
+  MemberAlreadyRejectedError,
+  MemberNotFoundError,
+  MemberNotPendingError,
+  MemberOwnershipDeniedError,
+} from "@/lib/domain/members/errors";
+import {
+  EmbeddingFailedError,
+  SearchFeatureDisabledError,
+  SearchQueryTooShortError,
+} from "@/lib/domain/search/errors";
+import {
+  DraftValidationError,
+  EmailVolumeCapError,
+  RecipientSuppressedError,
+} from "@/lib/notifications/errors";
 import { ActionMetadataValidationError, createSafeActionClient } from "next-safe-action";
 import { z } from "zod";
 import { buildAbility } from "./ability";
@@ -278,6 +298,154 @@ function handleServerError(err: Error): string {
       title: "Unprocessable Entity",
       status: 422,
       code: "HOLD_NOT_PLACEABLE",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof HoldOwnershipDeniedError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Forbidden",
+      status: 403,
+      code: "HOLD_OWNERSHIP_DENIED",
+      detail: err.message,
+    });
+  }
+
+  // --- Member management errors (Spec 04) ---
+
+  if (err instanceof MemberNotFoundError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      code: "MEMBER_NOT_FOUND",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof MemberAlreadyExistsError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "MEMBER_ALREADY_EXISTS",
+      // Opaque detail — no field name leaked to avoid enumeration.
+      detail: "An account with this information already exists in this library",
+    });
+  }
+
+  if (err instanceof MemberNotPendingError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Unprocessable Entity",
+      status: 422,
+      code: "MEMBER_NOT_PENDING",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof MemberAlreadyApprovedError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "MEMBER_ALREADY_APPROVED",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof MemberAlreadyRejectedError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "MEMBER_ALREADY_REJECTED",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof MemberOwnershipDeniedError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Forbidden",
+      status: 403,
+      code: "MEMBER_OWNERSHIP_DENIED",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof LastTenantAdminError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "LAST_TENANT_ADMIN",
+      detail: err.message,
+    });
+  }
+
+  // --- Search errors (Spec 05) ---
+
+  if (err instanceof SearchQueryTooShortError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Unprocessable Entity",
+      status: 422,
+      code: "SEARCH_QUERY_TOO_SHORT",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof SearchFeatureDisabledError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      code: "SEARCH_FEATURE_DISABLED",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof EmbeddingFailedError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Service Unavailable",
+      status: 503,
+      code: "EMBEDDING_FAILED",
+      detail: "Embedding service temporarily unavailable",
+    });
+  }
+
+  // --- Notification errors (Spec 07) ---
+
+  if (err instanceof EmailVolumeCapError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Payment Required",
+      status: 402,
+      code: "EMAIL_VOLUME_CAP",
+      detail:
+        "Your library has reached its monthly email send limit. Please contact your administrator.",
+    });
+  }
+
+  if (err instanceof DraftValidationError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Unprocessable Entity",
+      status: 422,
+      code: "DRAFT_INVALID",
+      detail: err.message,
+    });
+  }
+
+  if (err instanceof RecipientSuppressedError) {
+    return JSON.stringify({
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "RECIPIENT_SUPPRESSED",
       detail: err.message,
     });
   }

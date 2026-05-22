@@ -9,7 +9,7 @@ const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 rounded-md font-medium text-body",
     "transition-instant transition-colors",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--bg-canvas))]",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
     "disabled:pointer-events-none disabled:opacity-40",
     "select-none",
   ],
@@ -17,13 +17,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-[hsl(var(--accent))] text-[hsl(var(--accent-text))] hover:bg-[hsl(var(--accent)/0.88)]",
-        secondary:
-          "bg-[hsl(var(--bg-surface-2))] text-[hsl(var(--text-primary))] border border-[hsl(var(--border-subtle))] hover:bg-[hsl(var(--bg-elevated))]",
-        ghost:
-          "text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--bg-elevated))] hover:text-[hsl(var(--text-primary))]",
-        destructive: "bg-[hsl(var(--danger))] text-white hover:bg-[hsl(var(--danger)/0.88)]",
-        link: "text-[hsl(var(--accent))] underline-offset-4 hover:underline p-0 h-auto",
+          // REVIEW: hover:bg-[hsl(var(--accent)/0.88)] — opacity variant; needs oklch/rgb token to use Tailwind modifier
+          "bg-accent text-accent-text hover:bg-[hsl(var(--accent)/0.88)]",
+        secondary: "bg-surface-2 text-text-primary border border-border-subtle hover:bg-elevated",
+        ghost: "text-text-secondary hover:bg-elevated hover:text-text-primary",
+        destructive:
+          // REVIEW: hover:bg-[hsl(var(--danger)/0.88)] — opacity variant; needs oklch/rgb token to use Tailwind modifier
+          "bg-danger text-white hover:bg-[hsl(var(--danger)/0.88)]",
+        link: "text-accent underline-offset-4 hover:underline p-0 h-auto",
       },
       size: {
         sm: "h-8 px-3 text-meta",

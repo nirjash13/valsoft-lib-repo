@@ -5,6 +5,15 @@
 --              with RLS FORCE, composite tenant-first indexes, and FIFO hold
 --              uniqueness constraint.
 -- Spec:        03 — Circulation (Borrow, Return, Holds & Renewals)
+--
+-- SAFETY LABEL REQUIRED: This migration contains a NOT NULL backfill:
+--   ALTER TABLE members ADD COLUMN IF NOT EXISTS status member_status NOT NULL DEFAULT 'active'
+-- Adding a NOT NULL column with a DEFAULT on an existing populated table requires
+-- the `safety:reviewed` PR label per .claude/rules/migrations.md §Per-PR safety.
+-- Postgres 11+ executes this without a full table rewrite (the default value is
+-- stored in the catalog, not back-filled immediately), but the project policy
+-- requires the label regardless of Postgres version semantics.
+-- Merge is blocked by CI until the `safety:reviewed` label is applied.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------

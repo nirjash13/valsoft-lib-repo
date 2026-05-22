@@ -5,14 +5,15 @@
  * `updated_at` value they last saw; the UPDATE includes `WHERE updated_at = expected`.
  * If another writer has already updated the row, `rowCount = 0` → OptimisticConcurrencyError.
  *
- * Emitting `book.updated` for the search-indexer is deferred to Spec 05.
- * TODO (Spec 05): emit a `book.updated` domain event after the update.
+ * Spec 05 REQ-05-03: re-embeds the book when any searchable field changes.
+ * The Postgres GENERATED tsv column is updated automatically by the DB engine.
  */
 
 import { writeAuditLog } from "@/lib/audit/audit-log";
 import type { BookId } from "@/lib/db/schema/_shared";
 import { books } from "@/lib/db/schema/books";
 import type { TenantCtx, TxClient } from "@/lib/db/with-tenant-tx";
+import { embedBook } from "@/lib/domain/search/embed-book";
 import { and, eq, isNull } from "drizzle-orm";
 import { OptimisticConcurrencyError } from "./errors";
 import { getBook } from "./get-book";
@@ -20,6 +21,31 @@ import type { UpdateBookInput } from "./schemas";
 
 export interface UpdateBookResult {
   id: BookId;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if any field that contributes to the tsvector/embedding has changed.
+ * Used to decide whether to trigger a re-embed after an update.
+ */
+function searchableFieldsChanged(
+  before: {
+    title: string;
+    authors: string[];
+    subjects: string[] | null;
+    description: string | null | undefined;
+  },
+  after: UpdateBookInput,
+): boolean {
+  if (before.title !== after.title) return true;
+  if (JSON.stringify(before.authors) !== JSON.stringify(after.authors)) return true;
+  if (JSON.stringify(before.subjects ?? null) !== JSON.stringify(after.subjects ?? null))
+    return true;
+  if ((before.description ?? null) !== (after.description ?? null)) return true;
+  return false;
 }
 
 /**
@@ -79,7 +105,19 @@ export async function updateBook(
     afterJson: input,
   });
 
-  // TODO (Spec 05): emit book.updated domain event for search indexer.
+  // Spec 05 REQ-05-03: re-embed if any searchable field changed.
+  // Non-fatal: a transient AI Gateway outage must not block book updates.
+  // A backfill Workflow (REQ-05-03 async indexing) is the follow-up path.
+  if (searchableFieldsChanged(before, input)) {
+    try {
+      await embedBook(tx, {
+        tenantId: ctx.tenantId as import("@/lib/db/schema/_shared").TenantId,
+        bookId: input.id as BookId,
+      });
+    } catch (err) {
+      console.warn(`[updateBook] embedding skipped — tenant=${ctx.tenantId} book=${input.id}`, err);
+    }
+  }
 
   return { id: input.id as BookId };
 }

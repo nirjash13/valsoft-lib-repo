@@ -32,7 +32,7 @@ export default async function TrashPage() {
       {/* Header */}
       <Link
         href="/books"
-        className="inline-flex items-center gap-1.5 text-meta text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] mb-6 transition-instant transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))] rounded"
+        className="inline-flex items-center gap-1.5 text-meta text-text-secondary hover:text-text-primary mb-6 transition-instant transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
       >
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
         Back to Books
@@ -40,23 +40,23 @@ export default async function TrashPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-h1 text-[hsl(var(--text-primary))] flex items-center gap-2">
-            <Trash2 className="h-7 w-7 text-[hsl(var(--danger))]" aria-hidden />
+          <h1 className="text-h1 text-text-primary flex items-center gap-2">
+            <Trash2 className="h-7 w-7 text-danger" aria-hidden />
             Trash
           </h1>
-          <p className="text-meta text-[hsl(var(--text-secondary))] mt-1">
+          <p className="text-meta text-text-secondary mt-1">
             Deleted books are restored within 30 days. After that, they are anonymized.
           </p>
         </div>
-        <div className="text-meta text-[hsl(var(--text-secondary))]">
+        <div className="text-meta text-text-secondary">
           {deletedBooks.length} item{deletedBooks.length !== 1 ? "s" : ""}
         </div>
       </div>
 
       {deletedBooks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <p className="text-h3 text-[hsl(var(--text-primary))] mb-2">Trash is empty</p>
-          <p className="text-body text-[hsl(var(--text-secondary))]">
+          <p className="text-h3 text-text-primary mb-2">Trash is empty</p>
+          <p className="text-body text-text-secondary">
             Removed books appear here and can be restored within 30 days.
           </p>
         </div>

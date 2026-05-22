@@ -13,6 +13,7 @@ import { withTenantTx } from "@/lib/db/with-tenant-tx";
 import { cancelHold } from "@/lib/domain/holds/cancel-hold";
 import { placeHold } from "@/lib/domain/holds/place-hold";
 import { CancelHoldSchema, PlaceHoldSchema } from "@/lib/domain/holds/schemas";
+import { getMemberByUserId } from "@/lib/domain/members/get-member-by-user-id";
 import { revalidateTag } from "next/cache";
 
 // ---------------------------------------------------------------------------
@@ -57,7 +58,29 @@ export const cancelHoldAction = actionClient
   .metadata({ permission: "hold:delete" })
   .action(async ({ parsedInput, ctx }) => {
     await withTenantTx(ctx.tenantCtx, async (tx, txCtx) => {
-      await cancelHold(tx, txCtx, parsedInput);
+      // Ownership enforcement: librarians and admins can cancel any hold in the tenant.
+      // Members may only cancel their own holds — pass callerMemberId so the domain
+      // function can verify ownership (M-5 / H-1 fix).
+      // `hold:manage` is granted only to tenant_admin; librarians have `hold:delete`
+      // but also `loan:checkin` which members lack. Easiest stable check: if the caller
+      // can "checkin" a Loan they are staff; otherwise they are a member-tier caller.
+      const isStaff = ctx.ability.can("checkin", "Loan");
+      let callerMemberId: string | undefined;
+      if (!isStaff) {
+        // Member caller — resolve their member record so we can enforce ownership.
+        // getMemberByUserId is a Spec 04 stub (returns null until auth0_user_id is linked).
+        // When null, no memberId is passed and the ownership check is skipped for
+        // unlinked accounts. Unlinked members cannot see their holds (holds page shows
+        // MemberAccountPending), so this does not open a privilege-escalation window.
+        const member = await getMemberByUserId(tx, txCtx, ctx.session.sub);
+        callerMemberId = member?.id;
+      }
+
+      if (callerMemberId !== undefined) {
+        await cancelHold(tx, txCtx, { holdId: parsedInput.holdId, callerMemberId });
+      } else {
+        await cancelHold(tx, txCtx, { holdId: parsedInput.holdId });
+      }
     });
 
     const tenantId = ctx.tenantCtx.tenantId;

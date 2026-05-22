@@ -20,6 +20,11 @@ export const tenants = pgTable("tenants", {
   holdPickupHours: integer("hold_pickup_hours").notNull().default(72),
   maxRenewals: integer("max_renewals").notNull().default(2),
   publicCatalogEnabled: boolean("public_catalog_enabled").notNull().default(false),
+
+  // Per-tenant email volume cap (Spec 07 NFR-07-03).
+  // Default 5,000 emails/month. Enforced by assertEmailVolume before each send.
+  emailMonthlyCap: integer("email_monthly_cap").notNull().default(5000),
+
   createdAt: createdAt(),
 });
 

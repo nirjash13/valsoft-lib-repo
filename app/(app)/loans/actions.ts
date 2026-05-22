@@ -17,6 +17,7 @@ import { borrowBook } from "@/lib/domain/loans/borrow-book";
 import { renewLoan } from "@/lib/domain/loans/renew-loan";
 import { returnBook } from "@/lib/domain/loans/return-book";
 import { BorrowBookSchema, RenewLoanSchema, ReturnBookSchema } from "@/lib/domain/loans/schemas";
+import { onHoldPromoted } from "@/lib/notifications/triggers";
 import { revalidateTag } from "next/cache";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,16 @@ export const returnBookAction = actionClient
     revalidateTag(`tenant:${tenantId}:loans`, "default");
     revalidateTag(`tenant:${tenantId}:holds`, "default");
     revalidateTag(`tenant:${tenantId}:books`, "default");
+
+    // Post-commit: fire hold-ready email if a hold was promoted.
+    // Runs after the transaction commits; must not fail the return action.
+    if (result.promotedHoldId !== null) {
+      try {
+        await onHoldPromoted({ tenantId, holdId: result.promotedHoldId });
+      } catch (err) {
+        console.error("[returnBookAction] onHoldPromoted failed:", err);
+      }
+    }
 
     return { loanId: result.loan.id, returnedAt: result.loan.returnedAt?.toISOString() };
   });

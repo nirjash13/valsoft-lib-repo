@@ -7,7 +7,8 @@
  * REQ-03-03: When a loan is returned, check holds ordered by queued_at, take
  * the head row, set status='ready' and ready_until = NOW() + hold_pickup_hours.
  *
- * TODO (Spec 07): emit('hold.promoted', { holdId, memberId, tenantId }) after commit.
+ * Hold-ready notifications are triggered post-commit via onHoldPromoted()
+ * (lib/notifications/triggers.ts) — called by returnBookAction after the tx commits.
  */
 
 import { writeAuditLog } from "@/lib/audit/audit-log";
@@ -75,7 +76,7 @@ export async function promoteNextHold(
     },
   });
 
-  // TODO (Spec 07): emit('hold.promoted', { holdId: nextHold.id, memberId: nextHold.memberId, tenantId: ctx.tenantId })
+  // Hold-ready email is triggered post-commit by onHoldPromoted() in triggers.ts.
 
   return { promoted: true, holdId: nextHold.id };
 }

@@ -5,7 +5,8 @@
  * borrow attempts. The second requester blocks until the first commits, then
  * sees the active loan and receives BookAlreadyBorrowedError.
  *
- * TODO (Spec 07): emit('loan.checked_out', { loanId, tenantId }) after commit.
+ * Due-date reminders are cron-driven (hourly, lib/notifications/reminders.ts)
+ * — no event emission needed for loan.checked_out.
  */
 
 import { writeAuditLog } from "@/lib/audit/audit-log";
