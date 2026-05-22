@@ -112,6 +112,8 @@ export interface GenerateObjectParams<T> {
   prompt: string;
   tenantId: TenantId;
   feature: string;
+  /** Optional max tokens for the model output (e.g. 256 for structured-only responses). */
+  maxTokens?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +150,7 @@ export async function generateObjectViaGateway<T>(params: GenerateObjectParams<T
     schema: params.schema,
     system: params.system,
     prompt: params.prompt,
+    ...(params.maxTokens !== undefined ? { maxTokens: params.maxTokens } : {}),
     experimental_telemetry: {
       isEnabled: true,
       functionId: params.feature,

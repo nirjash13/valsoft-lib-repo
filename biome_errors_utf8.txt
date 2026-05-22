@@ -1,0 +1,423 @@
+app\(app)\reports\reports-client-view.tsx:261:7 lint/a11y/noSvgWithoutTitle ━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Alternative text title element cannot be empty
+  
+    259 │   return (
+    260 │     <div className="relative">
+  > 261 │       <svg viewBox="0 0 760 250" className="w-full h-auto overflow-visible select-none">
+        │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    262 │         <defs>
+    263 │           <linearGradient id="checkoutGrad" x1="0" y1="0" x2="0" y2="1">
+  
+  i For accessibility purposes, SVGs should have an alternative text, provided via title element. If the svg element has role="img", you should add the aria-label or aria-labelledby attribute.
+  
+
+app\(app)\reports\reports-client-view.tsx:504:7 lint/a11y/noSvgWithoutTitle ━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Alternative text title element cannot be empty
+  
+    502 │   return (
+    503 │     <div className="relative">
+  > 504 │       <svg viewBox="0 0 760 250" className="w-full h-auto overflow-visible select-none">
+        │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    505 │         <defs>
+    506 │           <linearGradient id="singleGrad" x1="0" y1="0" x2="0" y2="1">
+  
+  i For accessibility purposes, SVGs should have an alternative text, provided via title element. If the svg element has role="img", you should add the aria-label or aria-labelledby attribute.
+  
+
+app\(app)\reports\reports-client-view.tsx:692:7 lint/a11y/noSvgWithoutTitle ━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Alternative text title element cannot be empty
+  
+    690 │   return (
+    691 │     <div className="relative">
+  > 692 │       <svg viewBox="0 0 680 230" className="w-full h-auto overflow-visible select-none">
+        │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    693 │         <defs>
+    694 │           <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+  
+  i For accessibility purposes, SVGs should have an alternative text, provided via title element. If the svg element has role="img", you should add the aria-label or aria-labelledby attribute.
+  
+
+app\(app)\reports\reports-client-view.tsx:803:12 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    801 │   const [isNlLoading, setIsNlLoading] = useState(false);
+    802 │   const [nlResult, setNlResult] = useState<{
+  > 803 │     query: any;
+        │            ^^^
+    804 │     rows: Record<string, unknown>[];
+    805 │     sql: string;
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+app\(app)\reports\reports-client-view.tsx:919:19 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    917 │         setNlError("No response returned from the server.");
+    918 │       }
+  > 919 │     } catch (err: any) {
+        │                   ^^^
+    920 │       setNlError(err.message || "An unexpected error occurred.");
+    921 │     } finally {
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+app\(app)\reports\reports-client-view.tsx:1178:36 lint/style/noNonNullAssertion ━━━━━━━━━━━━━━━━━━━━
+
+  × Forbidden non-null assertion.
+  
+    1176 │                   <thead className="bg-surface-2 text-text-primary border-b border-border-subtle">
+    1177 │                     <tr>
+  > 1178 │                       {Object.keys(nlResult.rows[0]!).map((h) => (
+         │                                    ^^^^^^^^^^^^^^^^^
+    1179 │                         <th key={h} className="p-3 font-semibold capitalize">
+    1180 │                           {h.replace(/_/g, " ")}
+  
+
+app\(app)\reports\reports-client-view.tsx:1188:38 lint/style/noNonNullAssertion ━━━━━━━━━━━━━━━━━━━━
+
+  × Forbidden non-null assertion.
+  
+    1186 │                     {nlResult.rows.map((row, idx) => (
+    1187 │                       <tr key={idx} className="hover:bg-surface-2/40">
+  > 1188 │                         {Object.keys(nlResult.rows[0]!).map((h) => {
+         │                                      ^^^^^^^^^^^^^^^^^
+    1189 │                           const val = row[h];
+    1190 │                           return (
+  
+
+app\(app)\reports\reports-client-view.tsx:1251:15 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    1249 │             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    1250 │               {/* Card 1: Active Loans */}
+  > 1251 │               <div
+         │               ^^^^
+  > 1252 │                 onClick={() =>
+          ...
+  > 1260 │                 id="kpi-active-loans"
+  > 1261 │               >
+         │               ^
+    1262 │                 <div className="flex justify-between items-start text-meta text-text-secondary">
+    1263 │                   <span>Active Loans</span>
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+app\(app)\reports\reports-client-view.tsx:1289:15 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    1288 │               {/* Card 2: Overdue Loans */}
+  > 1289 │               <div
+         │               ^^^^
+  > 1290 │                 onClick={() =>
+          ...
+  > 1298 │                 id="kpi-overdue-loans"
+  > 1299 │               >
+         │               ^
+    1300 │                 <div className="flex justify-between items-start text-meta text-text-secondary">
+    1301 │                   <span>Overdue Loans</span>
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+app\(app)\reports\reports-client-view.tsx:1327:15 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    1326 │               {/* Card 3: Holds Queued */}
+  > 1327 │               <div
+         │               ^^^^
+  > 1328 │                 onClick={() =>
+          ...
+  > 1336 │                 id="kpi-holds-queued"
+  > 1337 │               >
+         │               ^
+    1338 │                 <div className="flex justify-between items-start text-meta text-text-secondary">
+    1339 │                   <span>Holds Queued</span>
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+app\(app)\reports\reports-client-view.tsx:1362:15 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    1361 │               {/* Card 4: Signups Today */}
+  > 1362 │               <div
+         │               ^^^^
+  > 1363 │                 onClick={() =>
+          ...
+  > 1371 │                 id="kpi-signups-today"
+  > 1372 │               >
+         │               ^
+    1373 │                 <div className="flex justify-between items-start text-meta text-text-secondary">
+    1374 │                   <span>Signups Today</span>
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+app\(app)\reports\reports-client-view.tsx:1448:60 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    1446 │                       </thead>
+    1447 │                       <tbody className="divide-y divide-border-subtle">
+  > 1448 │                         {drillDownFilteredItems.map((item: any, idx) => (
+         │                                                            ^^^
+    1449 │                           <tr key={idx} className="hover:bg-surface-2/40">
+    1450 │                             {activeDrillDown === "active_loans" ||
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+app\(app)\reports\reports-client-view.tsx:2283:29 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    2281 │                         return (
+    2282 │                           <React.Fragment key={log.id}>
+  > 2283 │                             <tr
+         │                             ^^^
+  > 2284 │                               onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+  > 2285 │                               className="hover:bg-surface-2/40 cursor-pointer transition-colors"
+  > 2286 │                             >
+         │                             ^
+    2287 │                               <td className="p-3">
+    2288 │                                 {isExpanded ? (
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+app\(app)\reports\reports-client-view.tsx:381:20 lint/suspicious/noArrayIndexKey ━━━━━━━━━━━━━━━━━━━
+
+  × Avoid using the index of an array as key property in an element.
+  
+    379 │           return (
+    380 │             <rect
+  > 381 │               key={i}
+        │                    ^
+    382 │               x={x}
+    383 │               y="20"
+  
+  i This is the source of the key value.
+  
+    375 │         {/* Invisible tracking rects for hover */}
+  > 376 │         {data.map((_, i) => {
+        │                       ^
+    377 │           const stepWidth = 680 / (data.length - 1);
+    378 │           const x = 50 + i * stepWidth - stepWidth / 2;
+  
+  i The order of the items may change, and this also affects performances and component state.
+  
+  i Check the React documentation. 
+  
+
+app\(app)\reports\reports-client-view.tsx:582:20 lint/suspicious/noArrayIndexKey ━━━━━━━━━━━━━━━━━━━
+
+  × Avoid using the index of an array as key property in an element.
+  
+    580 │           return (
+    581 │             <rect
+  > 582 │               key={i}
+        │                    ^
+    583 │               x={x}
+    584 │               y="20"
+  
+  i This is the source of the key value.
+  
+    576 │         {/* Tracking rects */}
+  > 577 │         {data.map((_, i) => {
+        │                       ^
+    578 │           const stepWidth = 680 / (data.length - 1);
+    579 │           const x = 50 + i * stepWidth - stepWidth / 2;
+  
+  i The order of the items may change, and this also affects performances and component state.
+  
+  i Check the React documentation. 
+  
+
+app\(app)\reports\reports-client-view.tsx:731:18 lint/suspicious/noArrayIndexKey ━━━━━━━━━━━━━━━━━━━
+
+  × Avoid using the index of an array as key property in an element.
+  
+    729 │         {bars.map((bar, i) => (
+    730 │           <rect
+  > 731 │             key={i}
+        │                  ^
+    732 │             x={bar.x}
+    733 │             y={bar.y}
+  
+  i This is the source of the key value.
+  
+    728 │         {/* Bars */}
+  > 729 │         {bars.map((bar, i) => (
+        │                         ^
+    730 │           <rect
+    731 │             key={i}
+  
+  i The order of the items may change, and this also affects performances and component state.
+  
+  i Check the React documentation. 
+  
+
+app\(app)\reports\reports-client-view.tsx:751:20 lint/suspicious/noArrayIndexKey ━━━━━━━━━━━━━━━━━━━
+
+  × Avoid using the index of an array as key property in an element.
+  
+    749 │           return (
+    750 │             <text
+  > 751 │               key={i}
+        │                    ^
+    752 │               x={bar.x + bar.w / 2}
+    753 │               y="215"
+  
+  i This is the source of the key value.
+  
+    744 │         {/* X Labels */}
+  > 745 │         {bars.map((bar, i) => {
+        │                         ^
+    746 │           // Only show labels for every index if N is small, or skip labels if crowded
+    747 │           const showLabel = bars.length <= 15 || i % Math.ceil(bars.length / 15) === 0;
+  
+  i The order of the items may change, and this also affects performances and component state.
+  
+  i Check the React documentation. 
+  
+
+app\(app)\reports\reports-client-view.tsx:1187:32 lint/suspicious/noArrayIndexKey ━━━━━━━━━━━━━━━━━━
+
+  × Avoid using the index of an array as key property in an element.
+  
+    1185 │                   <tbody className="divide-y divide-border-subtle">
+    1186 │                     {nlResult.rows.map((row, idx) => (
+  > 1187 │                       <tr key={idx} className="hover:bg-surface-2/40">
+         │                                ^^^
+    1188 │                         {Object.keys(nlResult.rows[0]!).map((h) => {
+    1189 │                           const val = row[h];
+  
+  i This is the source of the key value.
+  
+    1184 │                   </thead>
+    1185 │                   <tbody className="divide-y divide-border-subtle">
+  > 1186 │                     {nlResult.rows.map((row, idx) => (
+         │                                              ^^^
+    1187 │                       <tr key={idx} className="hover:bg-surface-2/40">
+    1188 │                         {Object.keys(nlResult.rows[0]!).map((h) => {
+  
+  i The order of the items may change, and this also affects performances and component state.
+  
+  i Check the React documentation. 
+  
+
+app\(app)\reports\reports-client-view.tsx:1226:13 lint/a11y/useButtonType ━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Provide an explicit type prop for the button element.
+  
+    1224 │           const isActive = activeTab === tab.id;
+    1225 │           return (
+  > 1226 │             <button
+         │             ^^^^^^^
+  > 1227 │               key={tab.id}
+          ...
+  > 1234 │               id={`tab-btn-${tab.id}`}
+  > 1235 │             >
+         │             ^
+    1236 │               <Icon className="h-4.5 w-4.5" />
+    1237 │               {tab.label}
+  
+  i The default type of a button is submit, which causes the submission of a form when placed inside a `form` element. This is likely not the behaviour that you want inside a React application.
+  
+  i Allowed button types are: submit, button or reset
+  
+
+app\(app)\reports\reports-client-view.tsx:1449:36 lint/suspicious/noArrayIndexKey ━━━━━━━━━━━━━━━━━━
+
+  × Avoid using the index of an array as key property in an element.
+  
+    1447 │                       <tbody className="divide-y divide-border-subtle">
+    1448 │                         {drillDownFilteredItems.map((item: any, idx) => (
+  > 1449 │                           <tr key={idx} className="hover:bg-surface-2/40">
+         │                                    ^^^
+    1450 │                             {activeDrillDown === "active_loans" ||
+    1451 │                             activeDrillDown === "holds_queued" ? (
+  
+  i This is the source of the key value.
+  
+    1446 │                       </thead>
+    1447 │                       <tbody className="divide-y divide-border-subtle">
+  > 1448 │                         {drillDownFilteredItems.map((item: any, idx) => (
+         │                                                                 ^^^
+    1449 │                           <tr key={idx} className="hover:bg-surface-2/40">
+    1450 │                             {activeDrillDown === "active_loans" ||
+  
+  i The order of the items may change, and this also affects performances and component state.
+  
+  i Check the React documentation. 
+  
+
+app\(app)\reports\reports-client-view.tsx:1738:32 lint/suspicious/noArrayIndexKey ━━━━━━━━━━━━━━━━━━
+
+  × Avoid using the index of an array as key property in an element.
+  
+    1736 │                   <tbody className="divide-y divide-border-subtle">
+    1737 │                     {initialData.discovery.zeroResultSearches.map((search, i) => (
+  > 1738 │                       <tr key={i} className="hover:bg-surface-2/40">
+         │                                ^
+    1739 │                         <td className="p-3 text-text-primary font-medium italic">
+    1740 │                           "{search.query}"
+  
+  i This is the source of the key value.
+  
+    1735 │                   </thead>
+    1736 │                   <tbody className="divide-y divide-border-subtle">
+  > 1737 │                     {initialData.discovery.zeroResultSearches.map((search, i) => (
+         │                                                                            ^
+    1738 │                       <tr key={i} className="hover:bg-surface-2/40">
+    1739 │                         <td className="p-3 text-text-primary font-medium italic">
+  
+  i The order of the items may change, and this also affects performances and component state.
+  
+  i Check the React documentation. 
+  
+
+app\(app)\reports\reports-client-view.tsx:2141:42 lint/suspicious/noArrayIndexKey ━━━━━━━━━━━━━━━━━━
+
+  × Avoid using the index of an array as key property in an element.
+  
+    2139 │                             <ul className="list-disc pl-5 text-meta text-text-secondary space-y-1">
+    2140 │                               {samples.map((s, idx) => (
+  > 2141 │                                 <li key={idx} className="italic text-text-secondary/90">
+         │                                          ^^^
+    2142 │                                   "{s.length > 80 ? `${s.substring(0, 80)}...` : s}"
+    2143 │                                 </li>
+  
+  i This is the source of the key value.
+  
+    2138 │                             </span>
+    2139 │                             <ul className="list-disc pl-5 text-meta text-text-secondary space-y-1">
+  > 2140 │                               {samples.map((s, idx) => (
+         │                                                ^^^
+    2141 │                                 <li key={idx} className="italic text-text-secondary/90">
+    2142 │                                   "{s.length > 80 ? `${s.substring(0, 80)}...` : s}"
+  
+  i The order of the items may change, and this also affects performances and component state.
+  
+  i Check the React documentation. 
+  
+
+Checked 1 file in 19ms. No fixes applied.
+Found 22 errors.
+lint ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Some errors were emitted while running checks.
+  
+

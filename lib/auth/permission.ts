@@ -167,6 +167,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly string[]>> = {
     "hold:update",
     "hold:delete", // Spec 03: librarians can cancel holds on behalf of members
     "auditlog:read",
+    "report:view",
     "ai:use_chat",
     "ai:use_enrich",
     "email:compose",

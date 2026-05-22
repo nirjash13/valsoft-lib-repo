@@ -34,6 +34,7 @@ export const aiUsage = pgTable("ai_usage", {
   completionTokens: integer("completion_tokens").notNull().default(0),
   costUsd: numeric("cost_usd", { precision: 10, scale: 4 }).notNull().default("0"),
   threadId: uuid("thread_id"),
+  latencyMs: integer("latency_ms"),
   createdAt: createdAt(),
 });
 

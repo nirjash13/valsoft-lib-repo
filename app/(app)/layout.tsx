@@ -21,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const canViewTrash = ability.can("delete", "Book");
   const canReadMembers = ability.can("read", "Member");
   const canComposeEmail = ability.can("compose", "Email");
+  const canViewReports = ability.can("view", "Report");
   // Resolved here so Builder F (⌘K palette) can reuse it from this same layout.
   const advisorEnabled = await isFeatureEnabled("readers_advisor");
 
@@ -33,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           canReadMembers={canReadMembers}
           advisorEnabled={advisorEnabled}
           canComposeEmail={canComposeEmail}
+          canViewReports={canViewReports}
         />
 
         {/* Right side: topbar + scrollable content */}

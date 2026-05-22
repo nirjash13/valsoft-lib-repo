@@ -53,6 +53,7 @@ interface SidebarProps {
   advisorEnabled: boolean;
   /** Whether the user can compose batch emails (librarian + tenant_admin). */
   canComposeEmail: boolean;
+  canViewReports: boolean;
 }
 
 export function Sidebar({
@@ -60,9 +61,13 @@ export function Sidebar({
   canReadMembers,
   advisorEnabled,
   canComposeEmail,
+  canViewReports,
 }: SidebarProps) {
   const pathname = usePathname();
-  const baseItems = canViewTrash ? [...BASE_NAV_ITEMS, TRASH_ITEM] : BASE_NAV_ITEMS;
+  const rawItems = canViewTrash ? [...BASE_NAV_ITEMS, TRASH_ITEM] : BASE_NAV_ITEMS;
+  const baseItems = rawItems.map((item) =>
+    item.label === "Reports" ? { ...item, disabled: !canViewReports } : item,
+  );
 
   function renderItem(item: NavItem) {
     const isActive = !item.disabled && pathname.startsWith(item.href);

@@ -1,0 +1,319 @@
+
+> stack@0.1.0 biome:check
+> biome check .
+
+.\app\(app)\reports\actions.ts:54:19 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    52 │         sql: queryResult.sql,
+    53 │       };
+  > 54 │     } catch (err: any) {
+       │                   ^^^
+    55 │       if (
+    56 │         err.name === "ZodError" ||
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+.\app\api\reports\export\route.ts:77:17 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    75 │       },
+    76 │     });
+  > 77 │   } catch (err: any) {
+       │                 ^^^
+    78 │     console.error("Export failed:", err);
+    79 │     return new Response(`Export failed: ${err.message}`, { status: 500 });
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+.\tests\unit\domain\reporting\reporting.test.ts:128:36 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    126 │ });
+    127 │ 
+  > 128 │ function serializeSqlChunks(query: any): string {
+        │                                    ^^^
+    129 │   if (!query) return "";
+    130 │   if (typeof query === "string" || typeof query === "number") return String(query);
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+.\tests\unit\domain\reporting\reporting.test.ts:147:19 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    145 │ describe("Reporting service SQL compilation & query isolation", () => {
+    146 │   it("sets the session config and generates correct parameterized SQL", async () => {
+  > 147 │     const mockTx: any = {
+        │                   ^^^
+    148 │       execute: vi.fn().mockResolvedValue({ rows: [] }),
+    149 │     };
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+.\tests\unit\domain\reporting\reporting.test.ts:151:18 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    149 │     };
+    150 │ 
+  > 151 │     const query: any = {
+        │                  ^^^
+    152 │       metric: "loans_count",
+    153 │       dimension: "subject",
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+.\lib\domain\reporting\service.ts:77:7 lint/suspicious/noImplicitAnyLet ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × This variable implicitly has the any type.
+  
+    76 │   // 3. Compile SQL (safe because viewName and dimension are strictly whitelisted strings)
+  > 77 │   let querySql;
+       │       ^^^^^^^^
+    78 │   let virtualSql = `SELECT * FROM ${viewName}`;
+    79 │ 
+  
+  i Variable declarations without type annotation and initialization implicitly have the any type. Declare a type or initialize the variable with some value.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:261:7 lint/a11y/noSvgWithoutTitle ━━━━━━━━━━━━━━━━━━━━━━
+
+  × Alternative text title element cannot be empty
+  
+    259 │   return (
+    260 │     <div className="relative">
+  > 261 │       <svg viewBox="0 0 760 250" className="w-full h-auto overflow-visible select-none">
+        │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    262 │         <defs>
+    263 │           <linearGradient id="checkoutGrad" x1="0" y1="0" x2="0" y2="1">
+  
+  i For accessibility purposes, SVGs should have an alternative text, provided via title element. If the svg element has role="img", you should add the aria-label or aria-labelledby attribute.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:504:7 lint/a11y/noSvgWithoutTitle ━━━━━━━━━━━━━━━━━━━━━━
+
+  × Alternative text title element cannot be empty
+  
+    502 │   return (
+    503 │     <div className="relative">
+  > 504 │       <svg viewBox="0 0 760 250" className="w-full h-auto overflow-visible select-none">
+        │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    505 │         <defs>
+    506 │           <linearGradient id="singleGrad" x1="0" y1="0" x2="0" y2="1">
+  
+  i For accessibility purposes, SVGs should have an alternative text, provided via title element. If the svg element has role="img", you should add the aria-label or aria-labelledby attribute.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:692:7 lint/a11y/noSvgWithoutTitle ━━━━━━━━━━━━━━━━━━━━━━
+
+  × Alternative text title element cannot be empty
+  
+    690 │   return (
+    691 │     <div className="relative">
+  > 692 │       <svg viewBox="0 0 680 230" className="w-full h-auto overflow-visible select-none">
+        │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    693 │         <defs>
+    694 │           <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+  
+  i For accessibility purposes, SVGs should have an alternative text, provided via title element. If the svg element has role="img", you should add the aria-label or aria-labelledby attribute.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:803:12 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    801 │   const [isNlLoading, setIsNlLoading] = useState(false);
+    802 │   const [nlResult, setNlResult] = useState<{
+  > 803 │     query: any;
+        │            ^^^
+    804 │     rows: Record<string, unknown>[];
+    805 │     sql: string;
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:919:19 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    917 │         setNlError("No response returned from the server.");
+    918 │       }
+  > 919 │     } catch (err: any) {
+        │                   ^^^
+    920 │       setNlError(err.message || "An unexpected error occurred.");
+    921 │     } finally {
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:1178:36 lint/style/noNonNullAssertion ━━━━━━━━━━━━━━━━━━
+
+  × Forbidden non-null assertion.
+  
+    1176 │                   <thead className="bg-surface-2 text-text-primary border-b border-border-subtle">
+    1177 │                     <tr>
+  > 1178 │                       {Object.keys(nlResult.rows[0]!).map((h) => (
+         │                                    ^^^^^^^^^^^^^^^^^
+    1179 │                         <th key={h} className="p-3 font-semibold capitalize">
+    1180 │                           {h.replace(/_/g, " ")}
+  
+
+.\app\(app)\reports\reports-client-view.tsx:1188:38 lint/style/noNonNullAssertion ━━━━━━━━━━━━━━━━━━
+
+  × Forbidden non-null assertion.
+  
+    1186 │                     {nlResult.rows.map((row, idx) => (
+    1187 │                       <tr key={idx} className="hover:bg-surface-2/40">
+  > 1188 │                         {Object.keys(nlResult.rows[0]!).map((h) => {
+         │                                      ^^^^^^^^^^^^^^^^^
+    1189 │                           const val = row[h];
+    1190 │                           return (
+  
+
+.\app\(app)\reports\reports-client-view.tsx:1251:15 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    1249 │             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    1250 │               {/* Card 1: Active Loans */}
+  > 1251 │               <div
+         │               ^^^^
+  > 1252 │                 onClick={() =>
+          ...
+  > 1260 │                 id="kpi-active-loans"
+  > 1261 │               >
+         │               ^
+    1262 │                 <div className="flex justify-between items-start text-meta text-text-secondary">
+    1263 │                   <span>Active Loans</span>
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:1289:15 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    1288 │               {/* Card 2: Overdue Loans */}
+  > 1289 │               <div
+         │               ^^^^
+  > 1290 │                 onClick={() =>
+          ...
+  > 1298 │                 id="kpi-overdue-loans"
+  > 1299 │               >
+         │               ^
+    1300 │                 <div className="flex justify-between items-start text-meta text-text-secondary">
+    1301 │                   <span>Overdue Loans</span>
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:1327:15 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    1326 │               {/* Card 3: Holds Queued */}
+  > 1327 │               <div
+         │               ^^^^
+  > 1328 │                 onClick={() =>
+          ...
+  > 1336 │                 id="kpi-holds-queued"
+  > 1337 │               >
+         │               ^
+    1338 │                 <div className="flex justify-between items-start text-meta text-text-secondary">
+    1339 │                   <span>Holds Queued</span>
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:1362:15 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    1361 │               {/* Card 4: Signups Today */}
+  > 1362 │               <div
+         │               ^^^^
+  > 1363 │                 onClick={() =>
+          ...
+  > 1371 │                 id="kpi-signups-today"
+  > 1372 │               >
+         │               ^
+    1373 │                 <div className="flex justify-between items-start text-meta text-text-secondary">
+    1374 │                   <span>Signups Today</span>
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:1448:60 lint/suspicious/noExplicitAny ━━━━━━━━━━━━━━━━━━
+
+  × Unexpected any. Specify a different type.
+  
+    1446 │                       </thead>
+    1447 │                       <tbody className="divide-y divide-border-subtle">
+  > 1448 │                         {drillDownFilteredItems.map((item: any, idx) => (
+         │                                                            ^^^
+    1449 │                           <tr key={idx} className="hover:bg-surface-2/40">
+    1450 │                             {activeDrillDown === "active_loans" ||
+  
+  i any disables many type checking rules. Its use should be avoided.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:2283:29 lint/a11y/useKeyWithClickEvents ━━━━━━━━━━━━━━━━
+
+  × Enforce to have the onClick mouse event with the onKeyUp, the onKeyDown, or the onKeyPress keyboard event.
+  
+    2281 │                         return (
+    2282 │                           <React.Fragment key={log.id}>
+  > 2283 │                             <tr
+         │                             ^^^
+  > 2284 │                               onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+  > 2285 │                               className="hover:bg-surface-2/40 cursor-pointer transition-colors"
+  > 2286 │                             >
+         │                             ^
+    2287 │                               <td className="p-3">
+    2288 │                                 {isExpanded ? (
+  
+  i Actions triggered using mouse events should have corresponding keyboard events to account for keyboard-only navigation.
+  
+
+.\app\(app)\reports\reports-client-view.tsx:381:20 lint/suspicious/noArrayIndexKey ━━━━━━━━━━━━━━━━━
+
+  × Avoid using the index of an array as key property in an element.
+  
+    379 │           return (
+    380 │             <rect
+  > 381 │               key={i}
+        │                    ^
+    382 │               x={x}
+    383 │               y="20"
+  
+  i This is the source of the key value.
+  
+    375 │         {/* Invisible tracking rects for hover */}
+  > 376 │         {data.map((_, i) => {
+        │                       ^
+    377 │           const stepWidth = 680 / (data.length - 1);
+    378 │           const x = 50 + i * stepWidth - stepWidth / 2;
+  
+  i The order of the items may change, and this also affects performances and component state.
+  
+  i Check the React documentation. 
+  
+
+The number of diagnostics exceeds the number allowed by Biome.
+Diagnostics not shown: 8.
+Checked 280 files in 78ms. No fixes applied.
+Found 26 errors.
+check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Some errors were emitted while running checks.
+  
+
