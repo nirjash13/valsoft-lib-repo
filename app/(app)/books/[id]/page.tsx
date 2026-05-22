@@ -1,3 +1,4 @@
+import { CheckoutButton } from "@/components/circulation/checkout-button";
 import { PlaceHoldButton } from "@/components/circulation/place-hold-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
 
   const canUpdate = ability.can("update", "Book");
   const canDelete = ability.can("delete", "Book");
+  const canBorrow = ability.can("create", "Loan");
   const canPlaceHold = ability.can("create", "Hold");
   const canReadHoldQueue = ability.can("read", "Hold");
   const gradient = coverGradient(book.title);
@@ -191,6 +193,10 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
               }}
               canDelete={canDelete}
             />
+            {/* Check out — shown when book is available and caller has loan:create. */}
+            {canBorrow && !isCheckedOut && !isDeleted && (
+              <CheckoutButton bookId={book.id} bookTitle={book.title} />
+            )}
             {/* Place Hold — shown when book is checked out and user can place holds.
                 Requires currentMember (auth0_user_id link, Spec 04). Until then,
                 only shows to librarians/admins who have can('create','Hold')

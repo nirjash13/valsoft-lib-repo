@@ -339,7 +339,9 @@ export function NewBookForm() {
               placeholder="e.g. 2008"
               aria-describedby={errors.year ? "year-error" : undefined}
               aria-invalid={errors.year ? "true" : "false"}
-              {...register("year", { valueAsNumber: true })}
+              {...register("year", {
+                setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+              })}
             />
             {errors.year && (
               <p id="year-error" className="text-meta text-danger" role="alert">
@@ -355,7 +357,9 @@ export function NewBookForm() {
               placeholder="e.g. 320"
               aria-describedby={errors.pageCount ? "page-count-error" : undefined}
               aria-invalid={errors.pageCount ? "true" : "false"}
-              {...register("pageCount", { valueAsNumber: true })}
+              {...register("pageCount", {
+                setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+              })}
             />
             {errors.pageCount && (
               <p id="page-count-error" className="text-meta text-danger" role="alert">

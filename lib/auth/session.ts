@@ -14,6 +14,7 @@
  */
 
 import { auth0 } from "@/lib/auth0";
+import { deriveRolesFromMembership } from "./derive-roles";
 import {
   DevBypassNoTenantsError,
   OrganizationMembershipRequiredError,
@@ -88,11 +89,19 @@ export async function getSession(): Promise<Session | null> {
   // (returns empty array) so unauthorized-by-default still works if the
   // Action hasn't been deployed yet.
   const rawRoles = user.roles;
-  const roles: readonly string[] = Array.isArray(rawRoles)
+  let roles: readonly string[] = Array.isArray(rawRoles)
     ? (rawRoles as unknown[]).filter((r): r is string => typeof r === "string")
     : [];
 
   const email = typeof user.email === "string" ? user.email : "";
+
+  // Fallback: when the JWT carries no `roles` claim (the Auth0 Post-Login Action
+  // that injects org roles is not deployed), derive the role from `members.role`
+  // — the schema's canonical record of intended role. Additive and default-deny:
+  // see lib/auth/derive-roles.ts. Never runs when the JWT already asserts roles.
+  if (roles.length === 0) {
+    roles = await deriveRolesFromMembership(orgId, user.sub, email);
+  }
 
   return {
     sub: user.sub as UserId,
@@ -150,13 +159,21 @@ export async function sessionToTenantCtx(session: Session): Promise<TenantCtx> {
       return { tenantId: envTenantId, userId: session.sub };
     }
 
-    // Fall back to querying the first tenant (oldest by created_at).
+    // Fall back to querying the most-populated tenant (the seeded demo tenant).
+    // A bare "oldest tenant" pick resolves to leftover integration-test fixture
+    // tenants (slug `verify-*`) that carry no catalog data, making the dev app
+    // look empty. Ordering by catalog size selects the real demo tenant.
     const { getOwnerPool } = await import("@/lib/db/owner-pool");
     const pool = getOwnerPool();
     const client = await pool.connect();
     try {
       const res = await client.query<{ id: string; auth0_org_id: string }>(
-        "SELECT id, auth0_org_id FROM tenants ORDER BY created_at LIMIT 1",
+        `SELECT t.id, t.auth0_org_id
+           FROM tenants t
+           LEFT JOIN books b ON b.tenant_id = t.id
+          GROUP BY t.id, t.auth0_org_id, t.created_at
+          ORDER BY count(b.id) DESC, t.created_at ASC
+          LIMIT 1`,
       );
       if (res.rows.length === 0) {
         // No tenants seeded — throw a clear error rather than returning a zero-UUID

@@ -32,11 +32,13 @@ import {
   UpdateMemberRoleSchema,
   UpdateMemberSchema,
 } from "@/lib/domain/members/schemas";
+import { searchMembers } from "@/lib/domain/members/search-members";
 import { updateMember } from "@/lib/domain/members/update-member";
 import { updateMemberRole } from "@/lib/domain/members/update-member-role";
 import { onMemberApproved, onMemberRejected } from "@/lib/notifications/triggers";
 import { and, count, eq, isNull, ne } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // approveMemberAction — member:update (librarian + tenant_admin)
@@ -270,4 +272,25 @@ export const updateMemberAdminAction = actionClient
       status: result.member.status,
       updatedAt: result.member.updatedAt.toISOString(),
     };
+  });
+
+// ---------------------------------------------------------------------------
+// searchMembersAction — member:read (librarian + tenant_admin)
+// ---------------------------------------------------------------------------
+
+/**
+ * Quick member lookup for the checkout dialog.
+ * Returns up to 10 active members matching the query (name or email ILIKE).
+ * When query is empty, returns the 10 most recently created active members.
+ *
+ * @permission member:read
+ */
+export const searchMembersAction = actionClient
+  .schema(z.object({ query: z.string().max(100) }))
+  .metadata({ permission: "member:read" })
+  .action(async ({ parsedInput, ctx }) => {
+    const results = await withTenantTx(ctx.tenantCtx, (tx, txCtx) =>
+      searchMembers(tx, txCtx, parsedInput.query),
+    );
+    return { members: results };
   });

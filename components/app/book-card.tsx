@@ -1,8 +1,7 @@
 import type { BookRow } from "@/lib/db/schema/books";
 import { cn } from "@/lib/utils/cn";
-import { coverGradient } from "@/lib/utils/cover-color";
-import Image from "next/image";
 import Link from "next/link";
+import { BookCover } from "./book-cover";
 
 interface BookCardProps {
   book: BookRow;
@@ -15,7 +14,6 @@ interface BookCardProps {
  * title + author text — never a broken-image placeholder.
  */
 export function BookCard({ book }: BookCardProps) {
-  const gradient = coverGradient(book.title);
   const primaryAuthor = book.authors[0] ?? "Unknown Author";
   const authorDisplay =
     book.authors.length > 1 ? `${primaryAuthor} +${book.authors.length - 1}` : primaryAuthor;
@@ -33,31 +31,7 @@ export function BookCard({ book }: BookCardProps) {
     >
       {/* Cover — 3:4 aspect ratio */}
       <div className="relative w-full" style={{ aspectRatio: "3/4" }} aria-hidden>
-        {book.coverUrl ? (
-          <Image
-            src={book.coverUrl}
-            alt={`Cover of ${book.title}`}
-            fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
-            className="object-cover"
-            onError={() => {
-              // Next.js Image handles broken URLs — falls through to the gradient below
-            }}
-          />
-        ) : (
-          // Typographic fallback cover (brief §design questions #3)
-          <div
-            className="absolute inset-0 flex flex-col justify-end p-3"
-            style={{ background: gradient }}
-          >
-            <p className="text-caption text-white/90 font-semibold line-clamp-3 leading-tight">
-              {book.title}
-            </p>
-            <p className="text-[11px] text-white/60 mt-1 line-clamp-1 leading-tight">
-              {primaryAuthor}
-            </p>
-          </div>
-        )}
+        <BookCover coverUrl={book.coverUrl} title={book.title} primaryAuthor={primaryAuthor} />
       </div>
 
       {/* Metadata */}

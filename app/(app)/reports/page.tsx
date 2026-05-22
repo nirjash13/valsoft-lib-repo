@@ -34,24 +34,19 @@ export default async function ReportsPage() {
   const tenantCtx = await sessionToTenantCtx(session);
   const isSystemOwner = session.roles.includes("system_owner");
 
-  // 1. Fetch tenant-scoped dashboard data inside a tenant transaction
-  const data = await withTenantTx(tenantCtx, async (tx) => {
-    const overview = await getOverviewDashboard(tx);
-    const circulation = await getCirculationDashboard(tx);
-    const discovery = await getDiscoveryDashboard(tx);
-    const members = await getMembersDashboard(tx);
-    const aiUsage = await getAiUsageDashboard(tx, tenantCtx.tenantId);
-    const audit = await getAuditDashboard(tx, {}, 25);
-
-    return {
-      overview,
-      circulation,
-      discovery,
-      members,
-      aiUsage,
-      audit,
-    };
-  });
+  // 1. Fetch tenant-scoped dashboard data. Each dashboard runs in its own
+  // tenant transaction so the six fetches execute concurrently on separate
+  // connections. Sharing a single tx serializes every query (~25 round-trips
+  // back-to-back) on one connection, which dominates this page's load time.
+  const [overview, circulation, discovery, members, aiUsage, audit] = await Promise.all([
+    withTenantTx(tenantCtx, (tx) => getOverviewDashboard(tx)),
+    withTenantTx(tenantCtx, (tx) => getCirculationDashboard(tx)),
+    withTenantTx(tenantCtx, (tx) => getDiscoveryDashboard(tx)),
+    withTenantTx(tenantCtx, (tx) => getMembersDashboard(tx)),
+    withTenantTx(tenantCtx, (tx) => getAiUsageDashboard(tx, tenantCtx.tenantId)),
+    withTenantTx(tenantCtx, (tx) => getAuditDashboard(tx, {}, 25)),
+  ]);
+  const data = { overview, circulation, discovery, members, aiUsage, audit };
 
   // 2. If system_owner, fetch platform-wide data using a system owner transaction
   let platformData = null;
