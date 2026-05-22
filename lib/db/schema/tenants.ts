@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { boolean, integer, numeric, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { createdAt } from "./_shared";
 
@@ -20,6 +21,14 @@ export const tenants = pgTable("tenants", {
   holdPickupHours: integer("hold_pickup_hours").notNull().default(72),
   maxRenewals: integer("max_renewals").notNull().default(2),
   publicCatalogEnabled: boolean("public_catalog_enabled").notNull().default(false),
+
+  // Per-tenant subject blocklist for the public catalog (Spec 09 REQ-09-06).
+  // Books with any blocked subject are excluded from the public browse surface.
+  // Applied defense-in-depth: in the DB view AND in the application layer.
+  publicCatalogSubjectBlocklist: text("public_catalog_subject_blocklist")
+    .array()
+    .notNull()
+    .default(sql`'{}'`),
 
   // Per-tenant email volume cap (Spec 07 NFR-07-03).
   // Default 5,000 emails/month. Enforced by assertEmailVolume before each send.
