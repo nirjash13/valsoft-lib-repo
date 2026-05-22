@@ -41,3 +41,5 @@ desktop.ini
 # Exception: docs/decisions/ contains ADRs that are committed and reviewed in CI
 /docs/*
 !/docs/decisions/
+
+.vercel
