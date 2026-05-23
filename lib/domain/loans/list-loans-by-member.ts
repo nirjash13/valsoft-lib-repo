@@ -2,6 +2,7 @@
  * listLoansByMember — returns active loans for a member with enriched status flags (REQ-03-07).
  */
 
+import { books } from "@/lib/db/schema/books";
 import { holds } from "@/lib/db/schema/holds";
 import { loans } from "@/lib/db/schema/loans";
 import type { LoanRow } from "@/lib/db/schema/loans";
@@ -13,11 +14,14 @@ import { canRenew } from "./loan-policy";
 export interface ActiveLoanView extends LoanRow {
   canRenew: boolean;
   isOverdue: boolean;
+  bookTitle: string;
+  bookAuthors: ReadonlyArray<string>;
 }
 
 /**
  * Returns all active (unreturned) loans for a member, ordered by due date ascending.
- * Enriches each loan with canRenew and isOverdue flags (REQ-03-07, REQ-03-08).
+ * Enriches each loan with canRenew, isOverdue flags, and the book title/authors
+ * (REQ-03-07, REQ-03-08) so the UI can render names instead of UUIDs.
  */
 export async function listLoansByMember(
   tx: TxClient,
@@ -32,17 +36,22 @@ export async function listLoansByMember(
 
   const maxRenewals = tenant?.maxRenewals ?? 2;
 
-  // Fetch active loans.
-  const activeLoans = await tx
-    .select()
+  // Fetch active loans joined with book title/authors.
+  const rows = await tx
+    .select({
+      loan: loans,
+      bookTitle: books.title,
+      bookAuthors: books.authors,
+    })
     .from(loans)
+    .innerJoin(books, eq(books.id, loans.bookId))
     .where(and(eq(loans.memberId, memberId), isNull(loans.returnedAt)))
     .orderBy(asc(loans.dueAt));
 
-  if (activeLoans.length === 0) return [];
+  if (rows.length === 0) return [];
 
   // Fetch books with any queued/ready hold (to check renewal eligibility).
-  const bookIds = activeLoans.map((l) => l.bookId);
+  const bookIds = rows.map((r) => r.loan.bookId);
   const blockedBookRows = await tx
     .selectDistinct({ bookId: holds.bookId })
     .from(holds)
@@ -51,13 +60,15 @@ export async function listLoansByMember(
   const blockedBookIdSet = new Set(blockedBookRows.map((r) => r.bookId));
   const now = new Date();
 
-  return activeLoans.map((loan) => ({
-    ...loan,
+  return rows.map((row) => ({
+    ...row.loan,
     canRenew: canRenew({
-      renewedCount: loan.renewedCount,
+      renewedCount: row.loan.renewedCount,
       maxRenewals,
-      hasQueuedHold: blockedBookIdSet.has(loan.bookId),
+      hasQueuedHold: blockedBookIdSet.has(row.loan.bookId),
     }),
-    isOverdue: loan.dueAt < now,
+    isOverdue: row.loan.dueAt < now,
+    bookTitle: row.bookTitle,
+    bookAuthors: row.bookAuthors ?? [],
   }));
 }

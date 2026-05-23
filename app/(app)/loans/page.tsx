@@ -102,13 +102,19 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
                     <td className="px-4 py-3">
                       <Link
                         href={`/books/${loan.bookId}`}
-                        className="text-accent hover:underline underline-offset-2 font-mono text-caption"
+                        className="text-accent hover:underline underline-offset-2"
                       >
-                        {loan.bookId.slice(0, 8)}…
+                        <span className="text-body font-medium">{loan.bookTitle}</span>
+                        {loan.bookAuthors.length > 0 && (
+                          <span className="text-meta text-text-tertiary ml-2">
+                            {loan.bookAuthors.join(", ")}
+                          </span>
+                        )}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-body text-text-secondary font-mono text-caption">
-                      {loan.memberId.slice(0, 8)}…
+                    <td className="px-4 py-3">
+                      <div className="text-body text-text-primary">{loan.memberDisplayName}</div>
+                      <div className="text-meta text-text-tertiary">{loan.memberEmail}</div>
                     </td>
                     <td className="px-4 py-3 text-body text-text-secondary">
                       {formatDate(loan.dueAt)}
@@ -122,7 +128,7 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        {canReturn && <ReturnButton loanId={loan.id} bookTitle={loan.bookId} />}
+                        {canReturn && <ReturnButton loanId={loan.id} bookTitle={loan.bookTitle} />}
                       </div>
                     </td>
                   </tr>
@@ -196,7 +202,7 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
                     href={`/books/${loan.bookId}`}
                     className="text-body font-medium text-text-primary hover:underline underline-offset-2 truncate"
                   >
-                    Book {loan.bookId.slice(0, 8)}…
+                    {loan.bookTitle}
                   </Link>
                   {loan.isOverdue ? (
                     <Badge variant="danger">Overdue</Badge>
@@ -204,6 +210,9 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
                     <Badge variant="success">Active</Badge>
                   )}
                 </div>
+                {loan.bookAuthors.length > 0 && (
+                  <p className="text-meta text-text-tertiary">by {loan.bookAuthors.join(", ")}</p>
+                )}
                 <p className="text-meta text-text-secondary">
                   Due {formatDate(loan.dueAt)}
                   {loan.renewedCount > 0 && ` · Renewed ${loan.renewedCount}×`}
