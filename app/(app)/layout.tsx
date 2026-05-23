@@ -2,22 +2,41 @@ import { Sidebar } from "@/components/app/sidebar";
 import { TopBar } from "@/components/app/topbar";
 import { CommandPalette, CommandPaletteProvider } from "@/components/command-palette";
 import { buildAbility } from "@/lib/auth/ability";
+import { OrganizationMembershipRequiredError, UnauthorizedError } from "@/lib/auth/errors";
 import { getSession } from "@/lib/auth/session";
+import type { Session } from "@/lib/auth/types";
 import { isFeatureEnabled } from "@/lib/flags";
+import { redirect } from "next/navigation";
 import { Toaster } from "sonner";
 
 /**
  * (app) layout — authenticated shell.
  *
- * Renders:
- *   - Left sidebar with navigation (Books, Members, Loans…)
- *   - Glass top bar with search hint and theme toggle
- *   - Main content area
- *   - Sonner toast region (aria-live="polite")
+ * Auth gate: Auth0 SDK v4's middleware attaches the session but does NOT
+ * auto-redirect unauthenticated or unprovisioned users. We handle two cases:
+ *   - No session → /auth/login
+ *   - Session exists but JWT has no org_id (user not a member of any Auth0
+ *     Organization) → /access-denied (a friendly page with a logout link).
+ *     getSession() throws OrganizationMembershipRequiredError in this case;
+ *     left uncaught it surfaces as a cryptic 500.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSession();
-  const ability = buildAbility(session?.roles ?? []);
+  let session: Session | null;
+  try {
+    session = await getSession();
+  } catch (err) {
+    if (err instanceof OrganizationMembershipRequiredError) {
+      redirect("/access-denied");
+    }
+    if (err instanceof UnauthorizedError) {
+      redirect("/auth/login");
+    }
+    throw err;
+  }
+  if (!session) {
+    redirect("/auth/login");
+  }
+  const ability = buildAbility(session.roles);
   const canViewTrash = ability.can("delete", "Book");
   const canReadMembers = ability.can("read", "Member");
   const canComposeEmail = ability.can("compose", "Email");
