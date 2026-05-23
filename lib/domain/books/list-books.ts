@@ -37,10 +37,16 @@ export async function listBooks(
     conditions.push(isNotNull(books.deletedAt));
   }
 
-  // Simple title/isbn text search (full-text search is Spec 05)
+  // Simple title/isbn text search (full-text search is Spec 05).
+  // ISBNs are stored normalized (digits only, no hyphens/spaces), so the
+  // isbn13 LIKE uses the digits-only form of the query — otherwise a user
+  // typing "978-0-38-547257-9" can never match the stored "9780385472579".
   if (query && query.length > 0) {
-    const pattern = `%${query}%`;
-    conditions.push(or(like(books.title, pattern), like(books.isbn13, pattern)));
+    const titleMatch = like(books.title, `%${query}%`);
+    const isbnDigits = query.replace(/\D/g, "");
+    const combined =
+      isbnDigits.length >= 3 ? or(titleMatch, like(books.isbn13, `%${isbnDigits}%`)) : titleMatch;
+    if (combined) conditions.push(combined);
   }
 
   const rows = await tx
