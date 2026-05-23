@@ -28,6 +28,7 @@
     "db:seed:demo": "node --env-file=.env.local scripts/seed-demo.mjs",
     "db:seed:circulation": "node --env-file=.env.local scripts/seed-circulation.mjs",
     "db:seed": "npm run db:seed:demo && npm run db:seed:circulation",
+    "auth:provision-test-users": "node --env-file=.env.local scripts/provision-test-users.mjs",
     "lint:prompts": "node scripts/lint-prompts.mjs",
     "check-prompts": "node scripts/check-prompt-changes.mjs",
     "spec-gate": "node scripts/spec-gate.mjs",
