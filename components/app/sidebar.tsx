@@ -7,6 +7,7 @@ import {
   BookMarked,
   BookOpen,
   Library,
+  LogOut,
   MessageSquare,
   RotateCcw,
   Search,
@@ -175,13 +176,27 @@ export function Sidebar({
             </>
           )}
 
-          {/* My profile — all authenticated users */}
+          {/* My profile + Sign out — all authenticated users */}
           <li className="pt-3 pb-1 px-3">
             <span className="text-caption text-text-tertiary font-medium uppercase tracking-wide">
               Account
             </span>
           </li>
           <li>{renderItem(MY_PROFILE_ITEM)}</li>
+          <li>
+            <a
+              href="/auth/logout"
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-body",
+                "transition-instant transition-colors",
+                "text-text-secondary hover:bg-elevated hover:text-text-primary",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
+              )}
+            >
+              <LogOut className="h-4 w-4 shrink-0" aria-hidden />
+              Sign out
+            </a>
+          </li>
         </ul>
       </nav>
 
