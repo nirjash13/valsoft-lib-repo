@@ -56,6 +56,10 @@ interface SidebarProps {
   canViewReports: boolean;
   /** Whether the user can access tenant settings (tenant_admin only). */
   canManageSettings: boolean;
+  /** Display name for the signed-in user (members.display_name or email fallback). */
+  userName: string;
+  /** Human-readable role label: "Admin", "Librarian", "Member". */
+  userRoleLabel: string;
 }
 
 export function Sidebar({
@@ -65,6 +69,8 @@ export function Sidebar({
   canComposeEmail,
   canViewReports,
   canManageSettings,
+  userName,
+  userRoleLabel,
 }: SidebarProps) {
   const pathname = usePathname();
   const rawItems = canViewTrash ? [...BASE_NAV_ITEMS, TRASH_ITEM] : BASE_NAV_ITEMS;
@@ -117,6 +123,28 @@ export function Sidebar({
       <div className="flex h-14 items-center gap-2 px-4 border-b border-border-subtle">
         <Library className="h-5 w-5 text-accent" aria-hidden />
         <span className="text-h3 font-semibold text-text-primary">Stack</span>
+      </div>
+
+      {/* Identity card — who is signed in */}
+      <div
+        className="flex items-center gap-3 px-3 py-3 border-b border-border-subtle"
+        aria-label="Signed-in user"
+      >
+        <div
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+            "bg-[hsl(var(--accent)/0.15)] text-accent text-body font-medium",
+          )}
+          aria-hidden
+        >
+          {userName.charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-meta font-medium text-text-primary" title={userName}>
+            {userName}
+          </p>
+          <p className="truncate text-caption text-text-tertiary">{userRoleLabel}</p>
+        </div>
       </div>
 
       {/* Navigation */}

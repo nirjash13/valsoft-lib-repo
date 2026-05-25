@@ -14,6 +14,7 @@
  */
 
 import { auth0 } from "@/lib/auth0";
+import { ensureMemberLinked } from "./bootstrap-member-link";
 import { deriveRolesFromMembership } from "./derive-roles";
 import {
   DevBypassNoTenantsError,
@@ -94,6 +95,14 @@ export async function getSession(): Promise<Session | null> {
     : [];
 
   const email = typeof user.email === "string" ? user.email : "";
+
+  // First-login bootstrap: stamp `members.auth0_user_id` if still NULL so that
+  // `getMemberByUserId(sub)` — the strict lookup behind My Loans / My Holds /
+  // My Profile — finds the member from this request onward. Cached per session
+  // (5 min TTL) so this is at most one indexed UPDATE per session, no-op once
+  // linked. Runs regardless of role source so it survives the eventual rollout
+  // of the Auth0 Post-Login Action that injects `roles` into the JWT.
+  await ensureMemberLinked(orgId, user.sub, email);
 
   // Fallback: when the JWT carries no `roles` claim (the Auth0 Post-Login Action
   // that injects org roles is not deployed), derive the role from `members.role`
