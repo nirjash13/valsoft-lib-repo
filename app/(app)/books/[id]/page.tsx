@@ -263,9 +263,10 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-caption text-text-tertiary w-6 shrink-0">#{index + 1}</span>
-                  <span className="text-body text-text-secondary font-mono text-caption truncate">
-                    Member {hold.memberId.slice(0, 8)}…
-                  </span>
+                  <div className="min-w-0">
+                    <p className="text-body text-text-primary truncate">{hold.memberDisplayName}</p>
+                    <p className="text-meta text-text-tertiary truncate">{hold.memberEmail}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   {hold.status === "ready" && <Badge variant="success">Ready</Badge>}

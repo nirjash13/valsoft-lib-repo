@@ -2,9 +2,10 @@ import { CancelHoldButton } from "@/components/circulation/cancel-hold-button";
 import { Badge } from "@/components/ui/badge";
 import { buildAbility } from "@/lib/auth/ability";
 import { requireSession, sessionToTenantCtx } from "@/lib/auth/session";
-import type { HoldRow } from "@/lib/db/schema/holds";
 import { withTenantTx } from "@/lib/db/with-tenant-tx";
+import type { BookHoldItem } from "@/lib/domain/holds/list-holds-by-book";
 import { listHoldsByBook } from "@/lib/domain/holds/list-holds-by-book";
+import type { MemberHoldItem } from "@/lib/domain/holds/list-holds-by-member";
 import { listHoldsByMember } from "@/lib/domain/holds/list-holds-by-member";
 import { getMemberByUserId } from "@/lib/domain/members/get-member-by-user-id";
 import { RotateCcw } from "lucide-react";
@@ -61,7 +62,7 @@ export default async function HoldsPage({ searchParams }: HoldsPageProps) {
           {holdQueue.length === 0 ? (
             <LibrarianHoldEmptyState />
           ) : (
-            <HoldQueueList holds={holdQueue} canCancel={canCancelHold} showBookLink={false} />
+            <PerBookHoldQueue holds={holdQueue} canCancel={canCancelHold} />
           )}
         </div>
       );
@@ -114,7 +115,7 @@ export default async function HoldsPage({ searchParams }: HoldsPageProps) {
       {holds.length === 0 ? (
         <MemberHoldEmptyState />
       ) : (
-        <HoldQueueList holds={holds} canCancel={canCancelHold} showBookLink />
+        <MemberHoldList holds={holds} canCancel={canCancelHold} />
       )}
     </div>
   );
@@ -124,13 +125,13 @@ export default async function HoldsPage({ searchParams }: HoldsPageProps) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-interface HoldQueueListProps {
-  holds: ReadonlyArray<HoldRow>;
+interface MemberHoldListProps {
+  holds: ReadonlyArray<MemberHoldItem>;
   canCancel: boolean;
-  showBookLink: boolean;
 }
 
-function HoldQueueList({ holds, canCancel, showBookLink }: HoldQueueListProps) {
+/** Renders the member's own holds — shows the book title (joined). */
+function MemberHoldList({ holds, canCancel }: MemberHoldListProps) {
   return (
     <ul className="space-y-3 list-none p-0 m-0">
       {holds.map((hold, index) => (
@@ -140,24 +141,21 @@ function HoldQueueList({ holds, canCancel, showBookLink }: HoldQueueListProps) {
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
-              {showBookLink ? (
-                <Link
-                  href={`/books/${hold.bookId}`}
-                  className="text-body font-medium text-text-primary hover:underline underline-offset-2 truncate"
-                >
-                  Book {hold.bookId.slice(0, 8)}…
-                </Link>
-              ) : (
-                <span className="text-body font-medium text-text-primary font-mono text-caption">
-                  Member {hold.memberId.slice(0, 8)}…
-                </span>
-              )}
+              <Link
+                href={`/books/${hold.bookId}`}
+                className="text-body font-medium text-text-primary hover:underline underline-offset-2 truncate"
+              >
+                {hold.bookTitle}
+              </Link>
               {hold.status === "ready" ? (
                 <Badge variant="success">Ready for pickup</Badge>
               ) : (
                 <Badge variant="secondary">#{index + 1} in queue</Badge>
               )}
             </div>
+            {hold.bookAuthors.length > 0 && (
+              <p className="text-meta text-text-tertiary mb-1">by {hold.bookAuthors.join(", ")}</p>
+            )}
             <p className="text-meta text-text-secondary">
               Queued {formatDate(hold.queuedAt)}
               {hold.readyUntil && ` · Pick up by ${formatDate(hold.readyUntil)}`}
@@ -166,7 +164,53 @@ function HoldQueueList({ holds, canCancel, showBookLink }: HoldQueueListProps) {
 
           {canCancel && (
             <div className="shrink-0">
-              <CancelHoldButton holdId={hold.id} bookTitle={`Book ${hold.bookId.slice(0, 8)}`} />
+              <CancelHoldButton holdId={hold.id} bookTitle={hold.bookTitle} />
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+interface PerBookHoldQueueProps {
+  holds: ReadonlyArray<BookHoldItem>;
+  canCancel: boolean;
+}
+
+/** Renders the per-book queue (librarian/admin view) — shows member name. */
+function PerBookHoldQueue({ holds, canCancel }: PerBookHoldQueueProps) {
+  return (
+    <ul className="space-y-3 list-none p-0 m-0">
+      {holds.map((hold, index) => (
+        <li
+          key={hold.id}
+          className="rounded-xl border border-border-subtle bg-surface p-4 flex items-center justify-between gap-4"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-body font-medium text-text-primary truncate">
+                {hold.memberDisplayName}
+              </span>
+              {hold.status === "ready" ? (
+                <Badge variant="success">Ready for pickup</Badge>
+              ) : (
+                <Badge variant="secondary">#{index + 1} in queue</Badge>
+              )}
+            </div>
+            <p className="text-meta text-text-tertiary mb-1">{hold.memberEmail}</p>
+            <p className="text-meta text-text-secondary">
+              Queued {formatDate(hold.queuedAt)}
+              {hold.readyUntil && ` · Pick up by ${formatDate(hold.readyUntil)}`}
+            </p>
+          </div>
+
+          {canCancel && (
+            <div className="shrink-0">
+              <CancelHoldButton
+                holdId={hold.id}
+                bookTitle={`hold for ${hold.memberDisplayName}`}
+              />
             </div>
           )}
         </li>
