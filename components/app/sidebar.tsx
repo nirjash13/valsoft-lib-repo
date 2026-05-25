@@ -184,10 +184,18 @@ export function Sidebar({
           </li>
           <li>{renderItem(MY_PROFILE_ITEM)}</li>
           <li>
-            <a
-              href="/auth/logout"
+            <button
+              type="button"
+              onClick={() => {
+                // Build an absolute returnTo URL — Auth0 /v2/logout rejects relative paths.
+                // Land on the public catalog (a middleware-bypass path) so we don't bounce
+                // through /auth/login and trigger silent SSO re-auth.
+                const origin = window.location.origin;
+                const returnTo = `${origin}/stack-public/catalog`;
+                window.location.href = `/auth/logout?returnTo=${encodeURIComponent(returnTo)}`;
+              }}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-body",
+                "w-full flex items-center gap-3 rounded-md px-3 py-2 text-body text-left",
                 "transition-instant transition-colors",
                 "text-text-secondary hover:bg-elevated hover:text-text-primary",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
@@ -195,7 +203,7 @@ export function Sidebar({
             >
               <LogOut className="h-4 w-4 shrink-0" aria-hidden />
               Sign out
-            </a>
+            </button>
           </li>
         </ul>
       </nav>
